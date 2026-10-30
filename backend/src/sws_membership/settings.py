@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="SWS_", env_file=".env", extra="ignore")
 
     database_url: str = "postgresql+psycopg://sws:sws@localhost:5432/sws_membership"
+    # The test suite creates and migrates this database itself.
+    test_database_url: str = "postgresql+psycopg://sws:sws@localhost:5432/sws_membership_test"
 
 
 settings = Settings()

@@ -30,8 +30,8 @@ def task_api():
 
 
 def task_test():
-    """Run the backend test suite."""
-    return {"actions": [f"cd {BACKEND} && uv run pytest"]}
+    """Run the backend test suite against the local Postgres."""
+    return {"actions": [f"cd {BACKEND} && uv run pytest"], "task_dep": ["db_up"]}
 
 
 def task_lint():

@@ -3,7 +3,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from sws_membership.database import Base
+from sws_membership.schema import metadata
 from sws_membership.settings import settings
 
 # this is the Alembic Config object, which provides
@@ -19,8 +19,11 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-config.set_main_option("sqlalchemy.url", settings.database_url)
-target_metadata = Base.metadata
+# A caller such as the test suite may set the url first; otherwise the
+# process settings decide, so one connection string serves app and migrations.
+if not config.get_main_option("sqlalchemy.url"):
+    config.set_main_option("sqlalchemy.url", settings.database_url)
+target_metadata = metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
