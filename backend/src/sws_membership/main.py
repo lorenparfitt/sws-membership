@@ -8,6 +8,10 @@ from sws_membership.auth.router import router as auth_router
 from sws_membership.catalog.router import router as catalog_router
 from sws_membership.health import router as health_router
 from sws_membership.mail.mailer import ConsoleMailer, Mailer
+from sws_membership.orders.router import router as orders_router
+from sws_membership.payments.fake import FakeProcessor
+from sws_membership.payments.nuvei import NuveiProcessor
+from sws_membership.payments.processor import PaymentProcessor
 from sws_membership.settings import settings
 
 
@@ -20,12 +24,28 @@ def configure_logging() -> None:
     logging.basicConfig(level=settings.log_level, format="%(levelname)s %(name)s: %(message)s")
 
 
-def create_application(mailer: Mailer | None = None) -> FastAPI:
+def configured_processor() -> PaymentProcessor:
+    if settings.payment_processor == "nuvei":
+        return NuveiProcessor(
+            merchant_id=settings.nuvei_merchant_id,
+            merchant_site_id=settings.nuvei_merchant_site_id,
+            secret_key=settings.nuvei_secret_key,
+            environment=settings.nuvei_environment,
+            notification_url=settings.nuvei_notification_url,
+        )
+    return FakeProcessor()
+
+
+def create_application(
+    mailer: Mailer | None = None, payment_processor: PaymentProcessor | None = None
+) -> FastAPI:
     application = FastAPI(title="SWS Membership")
     application.state.mailer = mailer or ConsoleMailer()
+    application.state.payment_processor = payment_processor or configured_processor()
     application.include_router(health_router)
     application.include_router(auth_router)
     application.include_router(catalog_router)
+    application.include_router(orders_router)
     return application
 
 

@@ -1,5 +1,7 @@
 """Process configuration, read once from the environment."""
 
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,6 +16,16 @@ class Settings(BaseSettings):
     # Off only for plain-http development. Production is https.
     cookie_secure: bool = False
     log_level: str = "INFO"
+
+    # Which processor charges cards. The fake one needs no network and is
+    # approved by posting to the notification endpoint; production is nuvei.
+    payment_processor: Literal["fake", "nuvei"] = "fake"
+    nuvei_merchant_id: str = ""
+    nuvei_merchant_site_id: str = ""
+    nuvei_secret_key: str = ""
+    nuvei_environment: Literal["int", "prod"] = "int"
+    # Public URL Nuvei posts notifications to; must reach this API.
+    nuvei_notification_url: str = "http://localhost:8000/api/payments/notification"
 
 
 settings = Settings()
