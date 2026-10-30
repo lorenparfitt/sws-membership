@@ -65,3 +65,11 @@ def task_web():
 def task_web_build():
     """Type-check and build the frontend for production."""
     return {"actions": [f"cd {FRONTEND} && npm run build"]}
+
+
+def task_manage():
+    """Operator commands: uv run doit manage -- create-member|grant-role|revoke-role ..."""
+    return {
+        "actions": [f"cd {BACKEND} && uv run python -m sws_membership.manage %(args)s"],
+        "params": [{"name": "args", "long": "args", "default": "--help"}],
+    }
