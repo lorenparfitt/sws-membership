@@ -57,3 +57,32 @@ def session(engine):
         with Session(bind=connection, join_transaction_mode="create_savepoint") as session:
             yield session
         transaction.rollback()
+
+
+class RecordingMailer:
+    """Keeps every message so a test can read the link that was sent."""
+
+    def __init__(self) -> None:
+        self.sent: list = []
+
+    def send(self, message) -> None:
+        self.sent.append(message)
+
+
+@pytest.fixture
+def mailer():
+    return RecordingMailer()
+
+
+@pytest.fixture
+def client(session, mailer):
+    """An API client whose requests share the test's rolled-back session."""
+    from fastapi.testclient import TestClient
+
+    from sws_membership.auth.dependencies import get_database_session
+    from sws_membership.main import create_application
+
+    application = create_application(mailer=mailer)
+    application.dependency_overrides[get_database_session] = lambda: session
+    with TestClient(application) as client:
+        yield client
