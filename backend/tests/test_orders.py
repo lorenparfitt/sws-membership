@@ -225,3 +225,21 @@ def test_members_see_only_their_own_orders(session, client, catalog):
     )
     _sign_in(session, client, bob)
     assert client.get(f"/api/orders/{order.id}").status_code == 404
+
+
+def test_fake_approve_pays_the_members_own_order_through_the_real_path(session, client, catalog):
+    member = _member(session, "approve@example.com")
+    _sign_in(session, client, member)
+    order_id = client.post(
+        "/api/orders", json={"product_ids": [_product(session, "Day Pass").id]}
+    ).json()["id"]
+    assert client.post(f"/api/payments/fake/approve/{order_id}").json() == {"status": "paid"}
+    assert client.get(f"/api/orders/{order_id}").json()["status"] == "paid"
+    passes = client.get("/api/entitlements").json()
+    assert [(p["kind"], p["visits_remaining"], p["active"]) for p in passes] == [
+        ("day_visits", 1, True)
+    ]
+
+    other = _member(session, "other@example.com")
+    _sign_in(session, client, other)
+    assert client.post(f"/api/payments/fake/approve/{order_id}").status_code == 404
