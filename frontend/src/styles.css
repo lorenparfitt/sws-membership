@@ -1,0 +1,48 @@
+:root {
+  color-scheme: light dark;
+  --ink: #1d1d1b;
+  --quiet: #6b6b66;
+  --rule: #d8d8d3;
+  --card: #ffffff;
+  --page: #f6f6f3;
+  --accent: #0b6bcb;
+  --ok: #1e7f3a;
+  --problem: #b3261e;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #ecece8;
+    --quiet: #a3a39d;
+    --rule: #3a3a37;
+    --card: #1f1f1d;
+    --page: #141413;
+    --accent: #6fb1ff;
+    --ok: #5fcf7e;
+    --problem: #ff7b72;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: var(--ink); background: var(--page); }
+header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.75rem 1rem; border-bottom: 1px solid var(--rule); background: var(--card); }
+header nav { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+.brand { font-weight: 700; text-decoration: none; color: inherit; }
+a { color: var(--accent); }
+main { max-width: 64rem; margin: 0 auto; padding: 1.5rem 1rem; }
+.card { background: var(--card); border: 1px solid var(--rule); border-radius: 10px; padding: 1rem 1.25rem; }
+.card.narrow { max-width: 32rem; }
+.card.locked { opacity: 0.75; }
+.products { list-style: none; padding: 0; margin: 0; display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); }
+.products h3 { margin: 0 0 0.25rem; }
+.price { font-weight: 600; }
+.label { color: var(--quiet); font-weight: 400; font-size: 0.9rem; }
+.reasons { color: var(--problem); padding-left: 1.1rem; margin: 0.25rem 0 0.75rem; font-size: 0.95rem; }
+.problem { color: var(--problem); }
+.ok { color: var(--ok); }
+.inactive { color: var(--quiet); }
+label { display: block; margin-bottom: 0.75rem; }
+input { display: block; width: 100%; margin-top: 0.25rem; padding: 0.5rem 0.6rem; font: inherit; border: 1px solid var(--rule); border-radius: 6px; background: var(--page); color: inherit; }
+button { font: inherit; padding: 0.5rem 0.9rem; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+button:disabled { opacity: 0.45; cursor: default; }
+button.link { background: none; border: none; color: var(--accent); padding: 0; }
+table { width: 100%; border-collapse: collapse; background: var(--card); }
+th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--rule); }
