@@ -15,7 +15,7 @@ cards.
 ## Running locally
 
 The Nix flake provides every tool; enter it with `nix develop` (or direnv).
-Then:
+Run tasks from the repo root:
 
 ```
 uv run doit list        # all tasks

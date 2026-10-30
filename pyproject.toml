@@ -1,0 +1,12 @@
+# The task runner only. The application lives in backend/ with its own
+# project; this one exists so `uv run doit` works from the repo root.
+[project]
+name = "sws-membership-tasks"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["doit>=0.36"]
+
+[tool.uv]
+package = false
+python-preference = "only-system"
+python-downloads = "never"

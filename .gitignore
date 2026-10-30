@@ -9,5 +9,6 @@ frontend/dist/
 .direnv/
 result
 .doit.db
+.doit.json
 tmp/
 frontend/tsconfig.tsbuildinfo

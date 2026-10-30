@@ -1,6 +1,8 @@
 """Every top-level action, for developers and CI alike. Run `uv run doit list`."""
 
-DOIT_CONFIG = {"default_tasks": ["check"], "verbosity": 2}
+# JSON state: the default dbm backend takes an exclusive lock, so `doit api`
+# in one terminal would block `doit web` in another.
+DOIT_CONFIG = {"default_tasks": ["check"], "verbosity": 2, "backend": "json", "dep_file": ".doit.json"}
 
 BACKEND = "backend"
 
