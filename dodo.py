@@ -73,3 +73,17 @@ def task_manage():
         "actions": [f"cd {BACKEND} && uv run python -m sws_membership.manage %(args)s"],
         "params": [{"name": "args", "long": "args", "default": "--help"}],
     }
+
+
+def task_seed():
+    """Fill the local database with made-up members (never real data)."""
+    sample = "tmp/sample-members.csv"
+    manage = f"cd {BACKEND} && uv run python -m sws_membership.manage"
+    return {
+        "actions": [
+            "mkdir -p tmp",
+            f"{manage} generate-sample-members ../{sample} --count 200",
+            f"{manage} import-members ../{sample}",
+        ],
+        "task_dep": ["migrate"],
+    }
