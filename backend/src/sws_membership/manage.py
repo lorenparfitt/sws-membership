@@ -9,6 +9,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
+from sws_membership.catalog.sample_data import load_sample_catalog
 from sws_membership.database import SessionLocal
 from sws_membership.members.import_csv import import_members
 from sws_membership.members.lookup import find_member_by_email
@@ -63,6 +64,13 @@ def generate_sample_command(arguments: argparse.Namespace) -> None:
     print(f"wrote {arguments.count} made-up members to {path}")
 
 
+def seed_catalog_command(arguments: argparse.Namespace) -> None:
+    with SessionLocal() as session:
+        created = load_sample_catalog(session)
+        session.commit()
+    print(f"sample catalog: created {created} products")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="sws-membership")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -85,6 +93,9 @@ def build_parser() -> argparse.ArgumentParser:
     sample.add_argument("--count", type=int, default=200)
     sample.add_argument("--seed", type=int, default=2026)
     sample.set_defaults(run=generate_sample_command)
+
+    catalog = commands.add_parser("seed-catalog", help="load the development catalog")
+    catalog.set_defaults(run=seed_catalog_command)
 
     role_values = [role.value for role in MemberRole]
     for name, help_text in (("grant-role", "give a member a role"), ("revoke-role", "remove one")):

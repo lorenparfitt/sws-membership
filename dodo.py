@@ -84,6 +84,7 @@ def task_seed():
             "mkdir -p tmp",
             f"{manage} generate-sample-members ../{sample} --count 200",
             f"{manage} import-members ../{sample}",
+            f"{manage} seed-catalog",
         ],
         "task_dep": ["migrate"],
     }

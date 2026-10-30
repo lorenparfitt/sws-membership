@@ -5,6 +5,7 @@ import logging
 from fastapi import FastAPI
 
 from sws_membership.auth.router import router as auth_router
+from sws_membership.catalog.router import router as catalog_router
 from sws_membership.health import router as health_router
 from sws_membership.mail.mailer import ConsoleMailer, Mailer
 from sws_membership.settings import settings
@@ -24,6 +25,7 @@ def create_application(mailer: Mailer | None = None) -> FastAPI:
     application.state.mailer = mailer or ConsoleMailer()
     application.include_router(health_router)
     application.include_router(auth_router)
+    application.include_router(catalog_router)
     return application
 
 
