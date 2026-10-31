@@ -169,8 +169,8 @@ def test_minors_need_a_guardian_and_both_images_are_kept(session, storage, templ
 
 def test_unknown_birth_date_is_treated_as_a_minor(session):
     assert service.needs_guardian(Member(date_of_birth=None), TODAY)
-    assert service.needs_guardian(Member(date_of_birth=date(YEAR - 19, 6, 16)), TODAY)
-    assert not service.needs_guardian(Member(date_of_birth=date(YEAR - 19, 6, 15)), TODAY)
+    assert service.needs_guardian(Member(date_of_birth=date(YEAR - 18, 6, 16)), TODAY)
+    assert not service.needs_guardian(Member(date_of_birth=date(YEAR - 18, 6, 15)), TODAY)
 
 
 @pytest.mark.parametrize(

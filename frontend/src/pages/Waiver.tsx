@@ -80,7 +80,7 @@ export function Waiver() {
           {waiver.needs_guardian && (
             <>
               <p className="label">
-                You are under 19, or we do not have your date of birth, so a parent or guardian must
+                You are under 18, or we do not have your date of birth, so a parent or guardian must
                 also sign.
               </p>
               <label>

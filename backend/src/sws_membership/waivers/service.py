@@ -18,7 +18,7 @@ from sws_membership.members.models import Member
 from sws_membership.storage.objects import ObjectStorage
 from sws_membership.waivers.models import WaiverReset, WaiverSignature, WaiverTemplate
 
-AGE_OF_MAJORITY = 19  # British Columbia
+AGE_OF_MAJORITY = 18  # society rule: 17 and under need a guardian
 PNG_PREFIX = "data:image/png;base64,"
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 MAX_SIGNATURE_BYTES = 512 * 1024
@@ -144,7 +144,7 @@ def sign(
     guardian_signature: bytes | None = None
     if needs_guardian(member, now.date()):
         if not (given.guardian_name or "").strip() or not given.guardian_signature_png:
-            raise SignatureRejected("a parent or guardian must also sign for members under 19")
+            raise SignatureRejected("a parent or guardian must also sign for members under 18")
         guardian_signature = _decode_png(given.guardian_signature_png, "guardian signature")
 
     stamp = now.strftime("%Y%m%dT%H%M%S")
