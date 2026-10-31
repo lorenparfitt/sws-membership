@@ -78,6 +78,25 @@ export interface Entitlement {
   active: boolean;
 }
 
+export interface Waiver {
+  template_id: number | null;
+  version: number | null;
+  title: string | null;
+  body_text: string | null;
+  document_hash: string | null;
+  signed: boolean;
+  signed_at: string | null;
+  needs_guardian: boolean;
+}
+
+export interface WaiverSignature {
+  template_id: number;
+  signer_name: string;
+  signature_png: string;
+  guardian_name?: string;
+  guardian_signature_png?: string;
+}
+
 export const api = {
   me: () => request<Me>("/api/auth/me"),
   requestLink: (email: string) =>
@@ -95,6 +114,9 @@ export const api = {
   order: (id: number) => request<Order>(`/api/orders/${id}`),
   fakeApprove: (id: number) => request<{ status: string }>(`/api/payments/fake/approve/${id}`, { method: "POST" }),
   entitlements: () => request<Entitlement[]>("/api/entitlements"),
+  waiver: () => request<Waiver>("/api/waiver"),
+  signWaiver: (body: WaiverSignature) =>
+    request<Waiver>("/api/waiver/sign", { method: "POST", body: JSON.stringify(body) }),
 };
 
 export function money(cents: number, currency = "CAD"): string {

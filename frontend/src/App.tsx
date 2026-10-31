@@ -5,6 +5,7 @@ import { Catalog } from "./pages/Catalog";
 import { Checkout } from "./pages/Checkout";
 import { Passes } from "./pages/Passes";
 import { SignIn } from "./pages/SignIn";
+import { Waiver } from "./pages/Waiver";
 import "./styles.css";
 
 function Layout() {
@@ -20,6 +21,7 @@ function Layout() {
             <>
               <Link to="/">Catalog</Link>
               <Link to="/passes">My passes</Link>
+              <Link to="/waiver">Waiver</Link>
               <Link to="/account">Account</Link>
               <button className="link" onClick={() => void signOut()}>
                 Sign out
@@ -55,6 +57,7 @@ export function App() {
               <Route path="/checkout/:orderId" element={<Checkout />} />
               <Route path="/passes" element={<Passes />} />
               <Route path="/account" element={<Account />} />
+              <Route path="/waiver" element={<Waiver />} />
             </Route>
           </Route>
         </Routes>

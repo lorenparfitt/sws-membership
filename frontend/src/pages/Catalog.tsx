@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError, money, type Product } from "../api";
 
 export function Catalog() {
@@ -55,7 +55,15 @@ export function Catalog() {
             {product.locked_because.length > 0 && (
               <ul className="reasons">
                 {product.locked_because.map((reason) => (
-                  <li key={reason}>{reason}</li>
+                  <li key={reason}>
+                    {reason}
+                    {/waiver/i.test(reason) && (
+                      <>
+                        {" "}
+                        <Link to="/waiver">Sign it</Link>
+                      </>
+                    )}
+                  </li>
                 ))}
               </ul>
             )}
