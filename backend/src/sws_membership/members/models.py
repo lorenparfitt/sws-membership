@@ -29,6 +29,8 @@ class Member(Base):
     phone: Mapped[str | None] = mapped_column(String(40))
     date_of_birth: Mapped[date | None] = mapped_column(Date)
     photo_key: Mapped[str | None] = mapped_column(String(200))
+    # Null until the member sets one; the emailed link signs in regardless.
+    password_hash: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
