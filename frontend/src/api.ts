@@ -183,6 +183,93 @@ export interface StaffProfileBody extends ProfileBody {
   email: string;
 }
 
+export interface AdminPrice {
+  id: number;
+  label: string;
+  amount_cents: number;
+  starts_at: string;
+  ends_at: string | null;
+  members_only: boolean;
+}
+export interface AdminGrant {
+  id: number;
+  kind: string;
+  valid_from: string;
+  valid_to: string;
+  visit_count: number | null;
+}
+export interface AdminRule {
+  id: number;
+  kind: string;
+  parameters: Record<string, unknown>;
+  failure_message: string;
+}
+export interface AdminProduct {
+  id: number;
+  name: string;
+  description: string;
+  season_year: number;
+  sort_order: number;
+  active: boolean;
+  prices: AdminPrice[];
+  grants: AdminGrant[];
+  rules: AdminRule[];
+}
+export interface CatalogOptions {
+  entitlement_kinds: string[];
+  rule_kinds: { kind: string; parameters: Record<string, string> }[];
+}
+export interface ReportInfo {
+  name: string;
+  title: string;
+  description: string;
+  parameters: { name: string; label: string; kind: string; default: unknown }[];
+}
+export interface ReportOutput {
+  title: string;
+  columns: string[];
+  rows: unknown[][];
+}
+export interface WaiverHistory {
+  templates: { id: number; version: number; title: string; body_text: string; published_at: string }[];
+  resets: { reset_at: string; reason: string }[];
+}
+
+const json = (body: unknown) => ({ method: "POST", body: JSON.stringify(body) });
+
+export const admin = {
+  options: () => request<CatalogOptions>("/api/admin/catalog/options"),
+  products: () => request<AdminProduct[]>("/api/admin/catalog/products"),
+  createProduct: (body: Partial<AdminProduct>) => request<AdminProduct>("/api/admin/catalog/products", json(body)),
+  updateProduct: (id: number, body: Partial<AdminProduct>) =>
+    request<AdminProduct>(`/api/admin/catalog/products/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  addPrice: (id: number, body: Omit<AdminPrice, "id">) => request<AdminProduct>(`/api/admin/catalog/products/${id}/prices`, json(body)),
+  removePrice: (id: number, priceId: number) =>
+    request<AdminProduct>(`/api/admin/catalog/products/${id}/prices/${priceId}`, { method: "DELETE" }),
+  addGrant: (id: number, body: Omit<AdminGrant, "id">) => request<AdminProduct>(`/api/admin/catalog/products/${id}/grants`, json(body)),
+  removeGrant: (id: number, grantId: number) =>
+    request<AdminProduct>(`/api/admin/catalog/products/${id}/grants/${grantId}`, { method: "DELETE" }),
+  addRule: (id: number, body: Omit<AdminRule, "id">) => request<AdminProduct>(`/api/admin/catalog/products/${id}/rules`, json(body)),
+  removeRule: (id: number, ruleId: number) =>
+    request<AdminProduct>(`/api/admin/catalog/products/${id}/rules/${ruleId}`, { method: "DELETE" }),
+  rollover: (from_year: number, to_year: number) => request<AdminProduct[]>("/api/admin/catalog/rollover", json({ from_year, to_year })),
+  reports: () => request<ReportInfo[]>("/api/admin/reports"),
+  runReport: (name: string, parameters: Record<string, unknown>) =>
+    request<ReportOutput>(`/api/admin/reports/${name}/run`, json({ parameters })),
+  reportCsv: async (name: string, parameters: Record<string, unknown>): Promise<Blob> => {
+    const response = await fetch(`/api/admin/reports/${name}/csv`, {
+      ...json({ parameters }),
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+    });
+    if (!response.ok) throw new ApiError(response.status, await response.text());
+    return response.blob();
+  },
+  waiverHistory: () => request<WaiverHistory>("/api/admin/waiver/history"),
+  publishWaiver: (title: string, body_text: string) => request<{ version: number }>("/api/admin/waiver/publish", json({ title, body_text })),
+  resetWaivers: (reason: string) => request<{ reset_at: string }>("/api/admin/waiver/reset", json({ reason })),
+};
+
 export const api = {
   me: () => request<Me>("/api/auth/me"),
   requestLink: (email: string) =>

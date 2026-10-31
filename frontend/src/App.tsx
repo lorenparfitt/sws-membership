@@ -1,6 +1,10 @@
 import { BrowserRouter, Link, Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth";
 import { Account } from "./pages/Account";
+import { AdminLayout } from "./pages/admin/AdminLayout";
+import { CatalogAdmin } from "./pages/admin/CatalogAdmin";
+import { ReportsAdmin } from "./pages/admin/ReportsAdmin";
+import { WaiverAdmin } from "./pages/admin/WaiverAdmin";
 import { Catalog } from "./pages/Catalog";
 import { Checkout } from "./pages/Checkout";
 import { Kiosk } from "./pages/Kiosk";
@@ -26,6 +30,7 @@ function Layout() {
               <Link to="/passes">My passes</Link>
               <Link to="/waiver">Waiver</Link>
               {(me.roles.includes("staff") || me.roles.includes("admin")) && <Link to="/kiosk">Kiosk</Link>}
+              {me.roles.includes("admin") && <Link to="/admin/catalog">Admin</Link>}
               <Link to="/account">Account</Link>
               <button className="link" onClick={() => void signOut()}>
                 Sign out
@@ -65,6 +70,11 @@ export function App() {
               <Route path="/kiosk" element={<Kiosk />} />
               <Route path="/kiosk/members/:memberId" element={<MemberDetail />} />
               <Route path="/pay/:orderId" element={<PayWindow />} />
+              <Route path="/admin" element={<AdminLayout />}>
+                <Route path="catalog" element={<CatalogAdmin />} />
+                <Route path="waiver" element={<WaiverAdmin />} />
+                <Route path="reports" element={<ReportsAdmin />} />
+              </Route>
             </Route>
           </Route>
         </Routes>
