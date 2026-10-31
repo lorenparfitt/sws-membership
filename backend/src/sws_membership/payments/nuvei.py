@@ -22,6 +22,20 @@ from sws_membership.payments.processor import (
     PaymentNotification,
 )
 
+# Keys that may describe the card itself, even masked. They never reach the
+# database: the Payment row keeps the rest of the notification as evidence.
+CARD_FIELD_MARKERS = ("card", "exp", "bin", "cc", "pan", "cvv", "nameon")
+
+
+def scrub_card_fields(form: dict[str, str]) -> dict[str, str]:
+    return {
+        key: value
+        for key, value in form.items()
+        if not any(marker in key.lower() for marker in CARD_FIELD_MARKERS)
+        or key.lower() in {"currency", "clientuniqueid", "clientrequestid"}
+    }
+
+
 HOSTS = {
     "int": "https://ppp-test.nuvei.com",
     "prod": "https://secure.safecharge.com",
@@ -161,5 +175,5 @@ class NuveiProcessor:
             approved=form["Status"] in APPROVED_STATUSES,
             amount_cents=amount_cents,
             currency=form["currency"],
-            raw=dict(form),
+            raw=scrub_card_fields(form),
         )

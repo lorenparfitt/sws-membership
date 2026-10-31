@@ -8,6 +8,7 @@ recording path as a real notification; nothing is short-circuited.
 from fastapi import APIRouter, HTTPException, Request, status
 
 from sws_membership.auth.dependencies import CurrentMember, DatabaseSession
+from sws_membership.members.models import MemberRole
 from sws_membership.orders import service
 from sws_membership.orders.models import Order
 from sws_membership.payments.fake import FakeProcessor
@@ -21,7 +22,8 @@ def approve(
 ) -> dict:
     processor: FakeProcessor = request.app.state.payment_processor
     order = session.get(Order, order_id)
-    if order is None or order.member_id != member.id:
+    is_staff = member.has_role(MemberRole.STAFF) or member.has_role(MemberRole.ADMIN)
+    if order is None or (order.member_id != member.id and not is_staff):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no such order")
     transaction_id = f"fake-{order_id}-{len(order.payments) + 1}"
     form = {

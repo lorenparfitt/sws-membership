@@ -95,17 +95,22 @@ def order_status(order_id: int, session: DatabaseSession, member: CurrentMember)
     return OrderView.of(order)
 
 
+StaffMember = Annotated[Member, Depends(require_role(MemberRole.STAFF))]
+
+
 @router.post("/staff/orders", status_code=status.HTTP_201_CREATED)
 def staff_order(
     body: StaffOrder,
     session: DatabaseSession,
     today: CurrentDay,
-    staff: Annotated[Member, Depends(require_role(MemberRole.STAFF))],
+    staff: StaffMember,
+    processor: Processor,
 ) -> OrderView:
-    if body.payment_method is PaymentMethod.CARD:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "card sales go through the member checkout"
-        )
+    """Ring up any member. Cash and free pay at once; card opens the processor form.
+
+    The card form is the processor's own, shown to the member at the counter,
+    so card details never pass through staff hands or this API.
+    """
     member = session.get(Member, body.member_id)
     if member is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no such member")
@@ -115,6 +120,17 @@ def staff_order(
         )
     except service.OrderRefused as problem:
         raise _refused(problem)
+    checkout = None
+    if body.payment_method is PaymentMethod.CARD:
+        checkout = processor.open_checkout(order.id, order.total_cents, order.currency)
+    return OrderView.of(order, checkout)
+
+
+@router.get("/staff/orders/{order_id}")
+def staff_order_status(order_id: int, session: DatabaseSession, staff: StaffMember) -> OrderView:
+    order = session.get(Order, order_id)
+    if order is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such order")
     return OrderView.of(order)
 
 

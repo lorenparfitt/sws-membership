@@ -187,7 +187,7 @@ def test_refused_checkout_explains_itself(session, client, catalog):
     }
 
 
-def test_staff_ring_up_cash_for_another_member_but_not_card(session, client, catalog):
+def test_staff_ring_up_cash_or_open_a_card_form_for_another_member(session, client, catalog):
     staff = _member(session, "staff@example.com", roles=[MemberRole.STAFF])
     buyer = _member(session, "buyer@example.com")
     _sign_in(session, client, staff)
@@ -206,7 +206,13 @@ def test_staff_ring_up_cash_for_another_member_but_not_card(session, client, cat
         "/api/staff/orders",
         json={"member_id": buyer.id, "product_ids": [day_pass.id], "payment_method": "card"},
     )
-    assert card.status_code == 400
+    assert card.status_code == 201, card.text
+    body = card.json()
+    assert body["status"] == "pending_payment" and body["checkout"]["processor"] == "fake"
+    assert client.get(f"/api/staff/orders/{body['id']}").json()["status"] == "pending_payment"
+    # Development only: staff may approve the fake processor for the member at the counter.
+    assert client.post(f"/api/payments/fake/approve/{body['id']}").json() == {"status": "paid"}
+    assert client.get(f"/api/staff/orders/{body['id']}").json()["status"] == "paid"
 
 
 def test_plain_members_cannot_use_the_staff_till(session, client, catalog):

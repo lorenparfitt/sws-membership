@@ -7,6 +7,7 @@ from sws_membership.payments.nuvei import (
     format_amount,
     notification_checksum,
     open_order_checksum,
+    scrub_card_fields,
 )
 from sws_membership.payments.processor import NotificationRejected
 
@@ -98,3 +99,31 @@ def test_non_payment_transaction_types_are_ignored():
 def test_a_foreign_order_reference_is_rejected():
     with pytest.raises(NotificationRejected):
         _processor().verify_notification(_dmn(clientUniqueId="not-ours"))
+
+
+def test_card_fields_never_reach_the_stored_notification():
+    form = _dmn(
+        cardNumber="4****1111",
+        cardCompany="Visa",
+        expMonth="12",
+        expYear="2030",
+        nameOnCard="S Tester",
+        bin="411111",
+        ccToken="tok_abc",
+    )
+    result = _processor().verify_notification(form)
+    kept = set(result.raw)
+    assert {
+        "cardNumber",
+        "cardCompany",
+        "expMonth",
+        "expYear",
+        "nameOnCard",
+        "bin",
+        "ccToken",
+    }.isdisjoint(kept)
+    assert {"totalAmount", "currency", "Status", "PPP_TransactionID", "clientUniqueId"} <= kept
+    assert scrub_card_fields({"currency": "CAD", "clientRequestId": "x"}) == {
+        "currency": "CAD",
+        "clientRequestId": "x",
+    }
