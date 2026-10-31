@@ -4,7 +4,9 @@ import { Account } from "./pages/Account";
 import { Catalog } from "./pages/Catalog";
 import { Checkout } from "./pages/Checkout";
 import { Kiosk } from "./pages/Kiosk";
+import { MemberDetail } from "./pages/MemberDetail";
 import { Passes } from "./pages/Passes";
+import { PayWindow } from "./pages/PayWindow";
 import { SignIn } from "./pages/SignIn";
 import { Waiver } from "./pages/Waiver";
 import "./styles.css";
@@ -61,6 +63,8 @@ export function App() {
               <Route path="/account" element={<Account />} />
               <Route path="/waiver" element={<Waiver />} />
               <Route path="/kiosk" element={<Kiosk />} />
+              <Route path="/kiosk/members/:memberId" element={<MemberDetail />} />
+              <Route path="/pay/:orderId" element={<PayWindow />} />
             </Route>
           </Route>
         </Routes>

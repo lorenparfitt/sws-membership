@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { api, type CheckInResult, type GateMember } from "../api";
 
 type Station = "spit" | "shuttle";
@@ -111,7 +112,9 @@ export function Kiosk() {
                 )}
                 <div>
                   <h3>
-                    {member.first_name} {member.last_name}
+                    <Link to={`/kiosk/members/${member.id}`}>
+                      {member.first_name} {member.last_name}
+                    </Link>
                   </h3>
                   <label className="file small">
                     {member.photo_key ? "Retake photo" : "Take photo"}

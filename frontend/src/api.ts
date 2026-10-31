@@ -155,6 +155,34 @@ async function upload<T>(path: string, file: File): Promise<T> {
   return body as T;
 }
 
+export interface StaffOrder {
+  id: number;
+  status: string;
+  payment_method: string;
+  total_cents: number;
+  created_at: string;
+  paid_at: string | null;
+  lines: { product_name: string; amount_cents: number }[];
+}
+
+export interface MemberDetail {
+  id: number;
+  member_number: number;
+  roles: string[];
+  has_photo: boolean;
+  profile: Profile;
+  waiver_current: boolean;
+  waiver_signed_at: string | null;
+  passes: Entitlement[];
+  today: { station: string; checked_in_at: string; product_name: string }[];
+  orders: StaffOrder[];
+  catalog: Product[];
+}
+
+export interface StaffProfileBody extends ProfileBody {
+  email: string;
+}
+
 export const api = {
   me: () => request<Me>("/api/auth/me"),
   requestLink: (email: string) =>
@@ -187,6 +215,17 @@ export const api = {
       body: JSON.stringify({ member_id: memberId, station }),
     }),
   kioskToday: () => request<Record<string, number>>("/api/staff/kiosk/today"),
+  memberDetail: (id: number) => request<MemberDetail>(`/api/staff/members/${id}`),
+  staffUpdateProfile: (id: number, body: StaffProfileBody) =>
+    request<MemberDetail>(`/api/staff/members/${id}/profile`, { method: "PUT", body: JSON.stringify(body) }),
+  setRoles: (id: number, roles: string[]) =>
+    request<MemberDetail>(`/api/staff/members/${id}/roles`, { method: "PUT", body: JSON.stringify({ roles }) }),
+  staffOrderStatus: (id: number) => request<Order>(`/api/staff/orders/${id}`),
+  staffOrder: (memberId: number, productIds: number[], paymentMethod: "cash" | "free" | "card") =>
+    request<Order>("/api/staff/orders", {
+      method: "POST",
+      body: JSON.stringify({ member_id: memberId, product_ids: productIds, payment_method: paymentMethod }),
+    }),
   printCards: async (memberIds: number[]): Promise<Blob> => {
     const response = await fetch("/api/staff/cards/print", {
       method: "POST",

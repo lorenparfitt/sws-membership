@@ -70,3 +70,7 @@ legend { color: var(--quiet); font-size: 0.9rem; padding: 0 0.25rem; }
 label.file { display: inline-block; padding: 0.5rem 0.9rem; border-radius: 6px; border: 1px solid var(--accent); color: var(--accent); cursor: pointer; margin: 0; }
 label.file.small { padding: 0.25rem 0.6rem; font-size: 0.9rem; }
 label.file input { display: none; }
+.account.wide { max-width: 56rem; }
+.sell { list-style: none; padding: 0; margin: 0; }
+.sell li { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.5rem 0; border-bottom: 1px solid var(--rule); flex-wrap: wrap; }
+.pay { max-width: 30rem; margin: 0 auto; padding: 1rem; }
