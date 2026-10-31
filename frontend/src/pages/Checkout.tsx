@@ -1,28 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, money, type Checkout as CheckoutSession, type Order } from "../api";
-
-const NUVEI_SCRIPT = "https://cdn.safecharge.com/safecharge_resources/v1/checkout/checkout.js";
-
-function loadScript(src: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) return resolve();
-    const script = document.createElement("script");
-    script.src = src;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error(`failed to load ${src}`));
-    document.head.appendChild(script);
-  });
-}
+import { CardForm } from "../CardForm";
 
 export function Checkout() {
   const { orderId } = useParams();
   const id = Number(orderId);
   const location = useLocation();
-  const session = (location.state as { checkout?: CheckoutSession } | null)?.checkout ?? null;
+  const navigate = useNavigate();
+  const [session, setSession] = useState<CheckoutSession | null>(
+    (location.state as { checkout?: CheckoutSession } | null)?.checkout ?? null,
+  );
   const [order, setOrder] = useState<Order | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
-  const rendered = useRef(false);
 
   const refresh = useCallback(() => api.order(id).then(setOrder).catch(() => setProblem("Order not found.")), [id]);
 
@@ -37,28 +27,21 @@ export function Checkout() {
     return () => clearInterval(timer);
   }, [order, refresh]);
 
-  // Nuvei: render its hosted card form into #checkout once.
+  // Arrived without a session (reload, closed form, link from the orders
+  // page): ask for a fresh one. The order itself is unchanged.
   useEffect(() => {
-    if (!order || order.status !== "pending_payment" || !session || session.processor !== "nuvei") return;
-    if (rendered.current) return;
-    rendered.current = true;
-    loadScript(NUVEI_SCRIPT)
-      .then(() => {
-        window.checkout({
-          sessionToken: session.session_token,
-          env: session.parameters.env,
-          merchantId: session.parameters.merchantId,
-          merchantSiteId: session.parameters.merchantSiteId,
-          country: "CA",
-          locale: "en_CA",
-          currency: session.parameters.currency,
-          amount: session.parameters.amount,
-          renderTo: "#checkout",
-          onResult: () => void refresh(),
-        });
-      })
-      .catch(() => setProblem("The card form could not be loaded."));
-  }, [order, session, refresh]);
+    if (session || !order || order.status !== "pending_payment" || order.payment_method !== "card") return;
+    api
+      .reopenCheckout(id)
+      .then((reopened) => setSession(reopened.checkout))
+      .catch(() => setProblem("The payment form could not be reopened."));
+  }, [session, order, id]);
+
+  async function cancel() {
+    if (!window.confirm("Cancel this order? Nothing has been charged.")) return;
+    await api.cancelOrder(id).catch(() => setProblem("The order could not be cancelled."));
+    navigate("/orders");
+  }
 
   if (!order) return <p>{problem ?? "Loading…"}</p>;
 
@@ -80,20 +63,21 @@ export function Checkout() {
           Paid. Your passes are ready. <Link to="/passes">See my passes</Link>
         </p>
       )}
+      {order.status === "cancelled" && <p className="inactive">This order was cancelled.</p>}
 
-      {order.status === "pending_payment" && !session && (
-        <p>Waiting for payment to be confirmed… If you closed the card form, start the purchase again.</p>
-      )}
-
-      {order.status === "pending_payment" && session?.processor === "nuvei" && <div id="checkout" />}
-
-      {order.status === "pending_payment" && session?.processor === "fake" && (
-        <div>
-          <p className="label">Development: no card form. The fake processor approves on request.</p>
-          <button onClick={() => api.fakeApprove(order.id).then(() => refresh())}>
-            Simulate approved card payment
-          </button>
-        </div>
+      {order.status === "pending_payment" && (
+        <>
+          {session ? (
+            <CardForm orderId={order.id} session={session} onResult={refresh} />
+          ) : (
+            <p>Opening the payment form…</p>
+          )}
+          <p className="actions">
+            <button className="link" onClick={() => void cancel()}>
+              Cancel this order
+            </button>
+          </p>
+        </>
       )}
     </section>
   );

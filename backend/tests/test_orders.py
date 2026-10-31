@@ -251,3 +251,88 @@ def test_fake_approve_pays_the_members_own_order_through_the_real_path(session, 
     other = _member(session, "other@example.com")
     _sign_in(session, client, other)
     assert client.post(f"/api/payments/fake/approve/{order_id}").status_code == 404
+
+
+def test_members_list_their_own_orders_newest_first_with_receipts_once_paid(
+    session, client, catalog
+):
+    member = _member(session, "history@example.com")
+    _sign_in(session, client, member)
+    day_pass = _product(session, "Day Pass")
+    first = client.post("/api/orders", json={"product_ids": [day_pass.id]}).json()["id"]
+    second = client.post("/api/orders", json={"product_ids": [day_pass.id]}).json()["id"]
+    assert client.post(f"/api/payments/fake/approve/{second}").json() == {"status": "paid"}
+
+    listed = client.get("/api/orders").json()
+    assert [(o["id"], o["status"]) for o in listed] == [
+        (second, "paid"),
+        (first, "pending_payment"),
+    ]
+    assert listed[0]["paid_at"] is not None and listed[1]["paid_at"] is None
+
+    receipt = client.get(f"/api/orders/{second}/receipt")
+    assert receipt.status_code == 200
+    assert f"order {second} is paid" in receipt.text
+    assert client.get(f"/api/orders/{first}/receipt").status_code == 409
+
+
+def test_a_closed_card_form_can_be_reopened_until_the_order_is_paid(session, client, catalog):
+    member = _member(session, "reopen@example.com")
+    _sign_in(session, client, member)
+    order_id = client.post(
+        "/api/orders", json={"product_ids": [_product(session, "Day Pass").id]}
+    ).json()["id"]
+
+    reopened = client.post(f"/api/orders/{order_id}/checkout")
+    assert reopened.status_code == 200, reopened.text
+    assert reopened.json()["checkout"]["session_token"] == f"fake-session-{order_id}"
+
+    client.post(f"/api/payments/fake/approve/{order_id}")
+    assert client.post(f"/api/orders/{order_id}/checkout").status_code == 409
+
+    cash = service.place_order(
+        session, member, [_product(session, "Day Pass").id], PaymentMethod.CASH, TODAY
+    )
+    assert client.post(f"/api/orders/{cash.id}/checkout").status_code == 409
+
+
+def test_cancelling_withdraws_an_unpaid_card_order_but_money_still_wins(session, client, catalog):
+    member = _member(session, "cancel@example.com")
+    _sign_in(session, client, member)
+    day_pass = _product(session, "Day Pass")
+    order_id = client.post("/api/orders", json={"product_ids": [day_pass.id]}).json()["id"]
+
+    cancelled = client.post(f"/api/orders/{order_id}/cancel")
+    assert cancelled.status_code == 200, cancelled.text
+    assert cancelled.json()["status"] == "cancelled"
+    assert client.post(f"/api/orders/{order_id}/cancel").status_code == 409
+    assert client.post(f"/api/orders/{order_id}/checkout").status_code == 409
+
+    # The processor's notification for a charge that already went through
+    # arrives after the cancel: the member paid, so the member gets the pass.
+    assert client.post(f"/api/payments/fake/approve/{order_id}").json() == {"status": "paid"}
+    assert client.get("/api/entitlements").json()[0]["kind"] == "day_visits"
+
+    paid = service.place_order(session, member, [day_pass.id], PaymentMethod.CASH, TODAY)
+    assert client.post(f"/api/orders/{paid.id}/cancel").status_code == 409
+
+
+def test_order_history_actions_are_scoped_to_the_owner_or_staff(session, client, catalog):
+    alice = _member(session, "alice2@example.com")
+    bob = _member(session, "bob2@example.com")
+    clerk = _member(session, "clerk2@example.com", roles=[MemberRole.STAFF])
+    _sign_in(session, client, alice)
+    order_id = client.post(
+        "/api/orders", json={"product_ids": [_product(session, "Day Pass").id]}
+    ).json()["id"]
+
+    _sign_in(session, client, bob)
+    assert client.get("/api/orders").json() == []
+    assert client.post(f"/api/orders/{order_id}/checkout").status_code == 404
+    assert client.post(f"/api/orders/{order_id}/cancel").status_code == 404
+    assert client.post(f"/api/staff/orders/{order_id}/cancel").status_code == 403
+
+    _sign_in(session, client, clerk)
+    assert client.post(f"/api/staff/orders/{order_id}/checkout").status_code == 200
+    assert client.post(f"/api/staff/orders/{order_id}/cancel").json()["status"] == "cancelled"
+    assert client.get(f"/api/staff/orders/{order_id}/receipt").status_code == 409

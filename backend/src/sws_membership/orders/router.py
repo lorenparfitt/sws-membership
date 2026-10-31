@@ -1,9 +1,13 @@
 """Buying online, ringing up at the Spit, and the processor's notification."""
 
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from sws_membership.auth.dependencies import (
     CurrentMember,
@@ -15,7 +19,7 @@ from sws_membership.catalog.router import CurrentDay
 from sws_membership.members.models import Member, MemberRole
 from sws_membership.orders import service
 from sws_membership.orders.models import Order, OrderStatus, PaymentMethod
-from sws_membership.orders.receipts import send_receipt
+from sws_membership.orders.receipts import receipt_text, send_receipt
 from sws_membership.payments.processor import NotificationRejected, PaymentProcessor
 
 router = APIRouter(prefix="/api", tags=["orders"])
@@ -54,6 +58,8 @@ class OrderView(BaseModel):
     payment_method: str
     total_cents: int
     currency: str
+    created_at: datetime
+    paid_at: datetime | None
     lines: list[LineView]
     checkout: CheckoutView | None = None
 
@@ -65,6 +71,8 @@ class OrderView(BaseModel):
             payment_method=order.payment_method.value,
             total_cents=order.total_cents,
             currency=order.currency,
+            created_at=order.created_at,
+            paid_at=order.paid_at,
             lines=[
                 LineView(product_name=l.product_name, amount_cents=l.amount_cents)
                 for l in order.lines
@@ -75,6 +83,50 @@ class OrderView(BaseModel):
 
 def _refused(problem: service.OrderRefused) -> HTTPException:
     return HTTPException(status.HTTP_409_CONFLICT, {"refused": problem.reasons})
+
+
+def _wrong_state(problem: service.WrongOrderState) -> HTTPException:
+    return HTTPException(status.HTTP_409_CONFLICT, str(problem))
+
+
+def _orders_of(session, member_id: int) -> list[Order]:
+    return list(
+        session.scalars(
+            select(Order)
+            .where(Order.member_id == member_id)
+            .options(selectinload(Order.lines))
+            .order_by(Order.created_at.desc(), Order.id.desc())
+        )
+    )
+
+
+def _own_order(session, member: Member, order_id: int) -> Order:
+    order = session.get(Order, order_id)
+    if order is None or order.member_id != member.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such order")
+    return order
+
+
+def _any_order(session, order_id: int) -> Order:
+    order = session.get(Order, order_id)
+    if order is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such order")
+    return order
+
+
+def _receipt(session, order: Order) -> PlainTextResponse:
+    if order.status is not OrderStatus.PAID:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"order {order.id} is not paid")
+    return PlainTextResponse(receipt_text(order, session.get(Member, order.member_id)))
+
+
+def _reopen(processor: PaymentProcessor, order: Order) -> OrderView:
+    """A fresh processor session for an order whose form was closed or lost."""
+    try:
+        service.require_pending_card(order)
+    except service.WrongOrderState as problem:
+        raise _wrong_state(problem)
+    return OrderView.of(order, processor.open_checkout(order.id, order.total_cents, order.currency))
 
 
 @router.post("/orders", status_code=status.HTTP_201_CREATED)
@@ -93,11 +145,35 @@ def place_order(
     return OrderView.of(order, checkout)
 
 
+@router.get("/orders")
+def my_orders(session: DatabaseSession, member: CurrentMember) -> list[OrderView]:
+    return [OrderView.of(order) for order in _orders_of(session, member.id)]
+
+
 @router.get("/orders/{order_id}")
 def order_status(order_id: int, session: DatabaseSession, member: CurrentMember) -> OrderView:
-    order = session.get(Order, order_id)
-    if order is None or order.member_id != member.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such order")
+    return OrderView.of(_own_order(session, member, order_id))
+
+
+@router.get("/orders/{order_id}/receipt", response_class=PlainTextResponse)
+def my_receipt(order_id: int, session: DatabaseSession, member: CurrentMember):
+    return _receipt(session, _own_order(session, member, order_id))
+
+
+@router.post("/orders/{order_id}/checkout")
+def reopen_checkout(
+    order_id: int, session: DatabaseSession, member: CurrentMember, processor: Processor
+) -> OrderView:
+    return _reopen(processor, _own_order(session, member, order_id))
+
+
+@router.post("/orders/{order_id}/cancel")
+def cancel_order(order_id: int, session: DatabaseSession, member: CurrentMember) -> OrderView:
+    order = _own_order(session, member, order_id)
+    try:
+        service.cancel_order(session, order)
+    except service.WrongOrderState as problem:
+        raise _wrong_state(problem)
     return OrderView.of(order)
 
 
@@ -137,9 +213,28 @@ def staff_order(
 
 @router.get("/staff/orders/{order_id}")
 def staff_order_status(order_id: int, session: DatabaseSession, staff: StaffMember) -> OrderView:
-    order = session.get(Order, order_id)
-    if order is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such order")
+    return OrderView.of(_any_order(session, order_id))
+
+
+@router.get("/staff/orders/{order_id}/receipt", response_class=PlainTextResponse)
+def staff_receipt(order_id: int, session: DatabaseSession, staff: StaffMember):
+    return _receipt(session, _any_order(session, order_id))
+
+
+@router.post("/staff/orders/{order_id}/checkout")
+def staff_reopen_checkout(
+    order_id: int, session: DatabaseSession, staff: StaffMember, processor: Processor
+) -> OrderView:
+    return _reopen(processor, _any_order(session, order_id))
+
+
+@router.post("/staff/orders/{order_id}/cancel")
+def staff_cancel_order(order_id: int, session: DatabaseSession, staff: StaffMember) -> OrderView:
+    order = _any_order(session, order_id)
+    try:
+        service.cancel_order(session, order)
+    except service.WrongOrderState as problem:
+        raise _wrong_state(problem)
     return OrderView.of(order)
 
 

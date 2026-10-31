@@ -64,6 +64,8 @@ export interface Order {
   payment_method: string;
   total_cents: number;
   currency: string;
+  created_at: string;
+  paid_at: string | null;
   lines: { product_name: string; amount_cents: number }[];
   checkout: Checkout | null;
 }
@@ -144,6 +146,12 @@ export interface ProfileBody {
   province: string;
   postal_code: string;
   sports: string[];
+}
+
+async function text(path: string): Promise<string> {
+  const response = await fetch(path, { credentials: "same-origin" });
+  if (!response.ok) throw new ApiError(response.status, await response.text());
+  return response.text();
 }
 
 async function upload<T>(path: string, file: File): Promise<T> {
@@ -285,6 +293,10 @@ export const api = {
   placeOrder: (productIds: number[]) =>
     request<Order>("/api/orders", { method: "POST", body: JSON.stringify({ product_ids: productIds }) }),
   order: (id: number) => request<Order>(`/api/orders/${id}`),
+  orders: () => request<Order[]>("/api/orders"),
+  reopenCheckout: (id: number) => request<Order>(`/api/orders/${id}/checkout`, { method: "POST" }),
+  cancelOrder: (id: number) => request<Order>(`/api/orders/${id}/cancel`, { method: "POST" }),
+  receipt: (id: number) => text(`/api/orders/${id}/receipt`),
   fakeApprove: (id: number) => request<{ status: string }>(`/api/payments/fake/approve/${id}`, { method: "POST" }),
   entitlements: () => request<Entitlement[]>("/api/entitlements"),
   waiver: () => request<Waiver>("/api/waiver"),
@@ -308,6 +320,9 @@ export const api = {
   setRoles: (id: number, roles: string[]) =>
     request<MemberDetail>(`/api/staff/members/${id}/roles`, { method: "PUT", body: JSON.stringify({ roles }) }),
   staffOrderStatus: (id: number) => request<Order>(`/api/staff/orders/${id}`),
+  staffReopenCheckout: (id: number) => request<Order>(`/api/staff/orders/${id}/checkout`, { method: "POST" }),
+  staffCancelOrder: (id: number) => request<Order>(`/api/staff/orders/${id}/cancel`, { method: "POST" }),
+  staffReceipt: (id: number) => text(`/api/staff/orders/${id}/receipt`),
   staffOrder: (memberId: number, productIds: number[], paymentMethod: "cash" | "free" | "card") =>
     request<Order>("/api/staff/orders", {
       method: "POST",

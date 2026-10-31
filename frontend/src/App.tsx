@@ -9,6 +9,7 @@ import { Catalog } from "./pages/Catalog";
 import { Checkout } from "./pages/Checkout";
 import { Kiosk } from "./pages/Kiosk";
 import { MemberDetail } from "./pages/MemberDetail";
+import { Orders } from "./pages/Orders";
 import { Passes } from "./pages/Passes";
 import { PayWindow } from "./pages/PayWindow";
 import { SignIn } from "./pages/SignIn";
@@ -28,6 +29,7 @@ function Layout() {
             <>
               <Link to="/">Catalog</Link>
               <Link to="/passes">My passes</Link>
+              <Link to="/orders">Orders</Link>
               <Link to="/waiver">Waiver</Link>
               {(me.roles.includes("staff") || me.roles.includes("admin")) && <Link to="/kiosk">Kiosk</Link>}
               {me.roles.includes("admin") && <Link to="/admin/catalog">Admin</Link>}
@@ -65,6 +67,7 @@ export function App() {
               <Route path="/" element={<Catalog />} />
               <Route path="/checkout/:orderId" element={<Checkout />} />
               <Route path="/passes" element={<Passes />} />
+              <Route path="/orders" element={<Orders />} />
               <Route path="/account" element={<Account />} />
               <Route path="/waiver" element={<Waiver />} />
               <Route path="/kiosk" element={<Kiosk />} />

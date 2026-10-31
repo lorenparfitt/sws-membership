@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+import { Fragment, useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, ApiError, money, type MemberDetail as Detail, type StaffProfileBody } from "../api";
 import { useAuth } from "../auth";
+import { statusLabel } from "./Orders";
 
 function toBody(detail: Detail): StaffProfileBody {
   const p = detail.profile;
@@ -30,6 +31,7 @@ export function MemberDetail() {
   const [sports, setSports] = useState<{ value: string; label: string }[]>([]);
   const [photoVersion, setPhotoVersion] = useState(0);
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const [receipt, setReceipt] = useState<{ id: number; text: string } | null>(null);
 
   const load = useCallback(async () => {
     const d = await api.memberDetail(id);
@@ -60,6 +62,38 @@ export function MemberDetail() {
     }
   }
 
+  function collectCard(orderId: number, totalCents: number) {
+    const popup = window.open(`/pay/${orderId}`, `pay-${orderId}`, "popup,width=520,height=720");
+    if (!popup) setNote({ ok: false, text: "The browser blocked the payment window. Allow popups for this site." });
+    const watch = setInterval(async () => {
+      const latest = await api.staffOrderStatus(orderId).catch(() => null);
+      if (latest && latest.status !== "pending_payment") {
+        clearInterval(watch);
+        await load();
+        if (latest.status === "paid") setNote({ ok: true, text: `Order ${orderId} paid by card, ${money(totalCents)}.` });
+      }
+    }, 3000);
+    setNote({ ok: true, text: `Order ${orderId} waiting for the card, ${money(totalCents)}.` });
+  }
+
+  async function cancelOrder(orderId: number) {
+    if (!window.confirm(`Cancel order ${orderId}? Nothing has been charged.`)) return;
+    setNote(null);
+    try {
+      await api.staffCancelOrder(orderId);
+      await load();
+      setNote({ ok: true, text: `Order ${orderId} cancelled.` });
+    } catch (error) {
+      setNote({ ok: false, text: error instanceof ApiError ? String(error.detail) : "Could not cancel." });
+    }
+  }
+
+  async function showReceipt(orderId: number) {
+    if (receipt?.id === orderId) return setReceipt(null);
+    const text = await api.staffReceipt(orderId).catch(() => "The receipt could not be loaded.");
+    setReceipt({ id: orderId, text });
+  }
+
   async function sell(productId: number, method: "cash" | "free" | "card") {
     setNote(null);
     try {
@@ -67,17 +101,7 @@ export function MemberDetail() {
       if (method === "card" && order.checkout) {
         // The processor session goes to the popup through sessionStorage, never the URL.
         sessionStorage.setItem(`checkout:${order.id}`, JSON.stringify(order.checkout));
-        const popup = window.open(`/pay/${order.id}`, `pay-${order.id}`, "popup,width=520,height=720");
-        if (!popup) setNote({ ok: false, text: "The browser blocked the payment window. Allow popups for this site." });
-        const watch = setInterval(async () => {
-          const latest = await api.staffOrderStatus(order.id).catch(() => null);
-          if (latest?.status === "paid") {
-            clearInterval(watch);
-            await load();
-            setNote({ ok: true, text: `Order ${order.id} paid by card, ${money(order.total_cents)}.` });
-          }
-        }, 3000);
-        setNote({ ok: true, text: `Order ${order.id} waiting for the card, ${money(order.total_cents)}.` });
+        collectCard(order.id, order.total_cents);
         return;
       }
       await load();
@@ -309,17 +333,44 @@ export function MemberDetail() {
                 <th>Total</th>
                 <th>Paid by</th>
                 <th>Status</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {detail.orders.map((order) => (
-                <tr key={order.id}>
-                  <td>{new Date(order.created_at).toLocaleString()}</td>
-                  <td>{order.lines.map((l) => l.product_name).join(", ")}</td>
-                  <td>{money(order.total_cents)}</td>
-                  <td>{order.payment_method}</td>
-                  <td>{order.status.replace("_", " ")}</td>
-                </tr>
+                <Fragment key={order.id}>
+                  <tr>
+                    <td>{new Date(order.created_at).toLocaleString()}</td>
+                    <td>{order.lines.map((l) => l.product_name).join(", ")}</td>
+                    <td>{money(order.total_cents)}</td>
+                    <td>{order.payment_method}</td>
+                    <td>{statusLabel(order.status)}</td>
+                    <td className="actions">
+                      {order.status === "pending_payment" && (
+                        <>
+                          <button className="link" onClick={() => collectCard(order.id, order.total_cents)}>
+                            Collect card
+                          </button>
+                          <button className="link" onClick={() => void cancelOrder(order.id)}>
+                            Cancel
+                          </button>
+                        </>
+                      )}
+                      {order.status === "paid" && (
+                        <button className="link" onClick={() => void showReceipt(order.id)}>
+                          {receipt?.id === order.id ? "Hide receipt" : "Receipt"}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                  {receipt?.id === order.id && (
+                    <tr>
+                      <td colSpan={6}>
+                        <pre className="receipt">{receipt.text}</pre>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>

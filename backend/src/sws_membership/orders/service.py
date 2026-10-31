@@ -22,6 +22,30 @@ class OrderRefused(Exception):
         self.reasons = reasons
 
 
+class WrongOrderState(Exception):
+    """The order is not in a state where this action makes sense."""
+
+
+def require_pending_card(order: Order) -> None:
+    """Only an unpaid card order can be reopened at the processor or cancelled."""
+    if order.status is not OrderStatus.PENDING_PAYMENT:
+        raise WrongOrderState(f"order {order.id} is {order.status.value}")
+    if order.payment_method is not PaymentMethod.CARD:
+        raise WrongOrderState(f"order {order.id} is not a card order")
+
+
+def cancel_order(session: Session, order: Order) -> None:
+    """Withdraw an unpaid card order.
+
+    Cancelling records intent only. If the processor still reports an
+    approved charge for it afterwards, record_payment pays the order anyway:
+    money that was taken must buy what it was taken for.
+    """
+    require_pending_card(order)
+    order.status = OrderStatus.CANCELLED
+    session.flush()
+
+
 def place_order(
     session: Session,
     member: Member,

@@ -95,3 +95,4 @@ textarea { display: block; width: 100%; margin-top: 0.25rem; padding: 0.5rem 0.6
 .report-list li { padding: 0.5rem 0.6rem; border-radius: 6px; cursor: pointer; display: grid; gap: 0.15rem; }
 .report-list li.chosen { background: var(--page); }
 @media (max-width: 48rem) { .reports { grid-template-columns: 1fr; } }
+.receipt { white-space: pre-wrap; font: 0.9rem/1.4 ui-monospace, monospace; background: var(--page); border-radius: 8px; padding: 0.75rem 1rem; margin: 0; }
