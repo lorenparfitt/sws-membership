@@ -1,5 +1,6 @@
 import { BrowserRouter, Link, Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth";
+import { Account } from "./pages/Account";
 import { Catalog } from "./pages/Catalog";
 import { Checkout } from "./pages/Checkout";
 import { Passes } from "./pages/Passes";
@@ -19,9 +20,7 @@ function Layout() {
             <>
               <Link to="/">Catalog</Link>
               <Link to="/passes">My passes</Link>
-              <span className="label">
-                {me.first_name} {me.last_name}
-              </span>
+              <Link to="/account">Account</Link>
               <button className="link" onClick={() => void signOut()}>
                 Sign out
               </button>
@@ -55,6 +54,7 @@ export function App() {
               <Route path="/" element={<Catalog />} />
               <Route path="/checkout/:orderId" element={<Checkout />} />
               <Route path="/passes" element={<Passes />} />
+              <Route path="/account" element={<Account />} />
             </Route>
           </Route>
         </Routes>

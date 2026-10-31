@@ -29,6 +29,7 @@ export interface Me {
   last_name: string;
   email: string;
   roles: string[];
+  has_password: boolean;
 }
 
 export interface Price {
@@ -84,6 +85,10 @@ export const api = {
   redeem: (token: string) =>
     request<Me>("/api/auth/redeem", { method: "POST", body: JSON.stringify({ token }) }),
   signOut: () => request<void>("/api/auth/sign-out", { method: "POST" }),
+  signInWithPassword: (email: string, password: string) =>
+    request<Me>("/api/auth/password", { method: "POST", body: JSON.stringify({ email, password }) }),
+  setPassword: (password: string) =>
+    request<void>("/api/auth/set-password", { method: "POST", body: JSON.stringify({ password }) }),
   catalog: () => request<Product[]>("/api/catalog"),
   placeOrder: (productIds: number[]) =>
     request<Order>("/api/orders", { method: "POST", body: JSON.stringify({ product_ids: productIds }) }),
