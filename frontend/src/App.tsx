@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from "./auth";
 import { Account } from "./pages/Account";
 import { Catalog } from "./pages/Catalog";
 import { Checkout } from "./pages/Checkout";
+import { Kiosk } from "./pages/Kiosk";
 import { Passes } from "./pages/Passes";
 import { SignIn } from "./pages/SignIn";
 import { Waiver } from "./pages/Waiver";
@@ -22,6 +23,7 @@ function Layout() {
               <Link to="/">Catalog</Link>
               <Link to="/passes">My passes</Link>
               <Link to="/waiver">Waiver</Link>
+              {(me.roles.includes("staff") || me.roles.includes("admin")) && <Link to="/kiosk">Kiosk</Link>}
               <Link to="/account">Account</Link>
               <button className="link" onClick={() => void signOut()}>
                 Sign out
@@ -58,6 +60,7 @@ export function App() {
               <Route path="/passes" element={<Passes />} />
               <Route path="/account" element={<Account />} />
               <Route path="/waiver" element={<Waiver />} />
+              <Route path="/kiosk" element={<Kiosk />} />
             </Route>
           </Route>
         </Routes>

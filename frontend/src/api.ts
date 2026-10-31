@@ -97,6 +97,26 @@ export interface WaiverSignature {
   guardian_signature_png?: string;
 }
 
+export interface GateMember {
+  id: number;
+  member_number: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  date_of_birth: string | null;
+  photo_key: string | null;
+  waiver_current: boolean;
+  passes: Entitlement[];
+  today: { station: string; checked_in_at: string; product_name: string }[];
+}
+
+export interface CheckInResult {
+  admitted: boolean;
+  new_today: boolean;
+  message: string;
+  member: GateMember;
+}
+
 export const api = {
   me: () => request<Me>("/api/auth/me"),
   requestLink: (email: string) =>
@@ -115,6 +135,13 @@ export const api = {
   fakeApprove: (id: number) => request<{ status: string }>(`/api/payments/fake/approve/${id}`, { method: "POST" }),
   entitlements: () => request<Entitlement[]>("/api/entitlements"),
   waiver: () => request<Waiver>("/api/waiver"),
+  kioskLookup: (q: string) => request<GateMember[]>(`/api/staff/kiosk/lookup?q=${encodeURIComponent(q)}`),
+  kioskCheckIn: (memberId: number, station: "spit" | "shuttle") =>
+    request<CheckInResult>("/api/staff/kiosk/check-in", {
+      method: "POST",
+      body: JSON.stringify({ member_id: memberId, station }),
+    }),
+  kioskToday: () => request<Record<string, number>>("/api/staff/kiosk/today"),
   signWaiver: (body: WaiverSignature) =>
     request<Waiver>("/api/waiver/sign", { method: "POST", body: JSON.stringify(body) }),
 };
