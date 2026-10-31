@@ -68,6 +68,13 @@ class Price(Base):
     def is_on_sale(self, day: date) -> bool:
         return self.starts_at <= day and (self.ends_at is None or day <= self.ends_at)
 
+    def order_lines_exist(self, session) -> bool:
+        from sqlalchemy import exists, select
+
+        from sws_membership.orders.models import OrderLine
+
+        return bool(session.scalar(select(exists().where(OrderLine.price_id == self.id))))
+
 
 class EntitlementGrant(Base):
     __tablename__ = "entitlement_grants"

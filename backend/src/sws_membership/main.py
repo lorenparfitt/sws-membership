@@ -5,6 +5,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
+from sws_membership.admin.router import router as admin_router
 from sws_membership.auth.router import router as auth_router
 from sws_membership.cards.router import router as cards_router
 from sws_membership.catalog.router import router as catalog_router
@@ -64,6 +65,7 @@ def create_application(
     application.include_router(waivers_router)
     application.include_router(kiosk_router)
     application.include_router(cards_router)
+    application.include_router(admin_router)
     if isinstance(application.state.payment_processor, FakeProcessor):
         application.include_router(fake_payments_router)
     return application
