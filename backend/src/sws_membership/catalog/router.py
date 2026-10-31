@@ -44,10 +44,8 @@ class ProductView(BaseModel):
     locked_because: list[str]
 
 
-@router.get("")
-def catalog(
-    session: DatabaseSession, member: CurrentMember, today: CurrentDay
-) -> list[ProductView]:
+def catalog_for(session, member, today: date) -> list[ProductView]:
+    """Every active product as one member sees it: price today, purchasable, why not."""
     facts = facts_for(session, member)
     products = session.scalars(
         select(Product)
@@ -79,3 +77,10 @@ def catalog(
             )
         )
     return views
+
+
+@router.get("")
+def catalog(
+    session: DatabaseSession, member: CurrentMember, today: CurrentDay
+) -> list[ProductView]:
+    return catalog_for(session, member, today)

@@ -13,6 +13,7 @@ from sws_membership.health import router as health_router
 from sws_membership.kiosk.router import router as kiosk_router
 from sws_membership.mail.mailer import ConsoleMailer, Mailer
 from sws_membership.members.router import router as members_router
+from sws_membership.members.staff_router import router as staff_members_router
 from sws_membership.orders.router import router as orders_router
 from sws_membership.payments.fake import FakeProcessor
 from sws_membership.payments.fake_router import router as fake_payments_router
@@ -56,6 +57,7 @@ def create_application(
     application.include_router(health_router)
     application.include_router(auth_router)
     application.include_router(members_router)
+    application.include_router(staff_members_router)
     application.include_router(catalog_router)
     application.include_router(orders_router)
     application.include_router(entitlements_router)
