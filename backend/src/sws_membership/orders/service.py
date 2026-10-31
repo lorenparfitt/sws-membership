@@ -1,11 +1,12 @@
 """Placing an order, paying it, and issuing what it bought."""
 
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from sws_membership.catalog.eligibility import evaluate
+from sws_membership.catalog.eligibility import evaluate_basket
 from sws_membership.catalog.facts import facts_for
 from sws_membership.catalog.models import CURRENCY, Product
 from sws_membership.entitlements.models import Entitlement
@@ -46,6 +47,62 @@ def cancel_order(session: Session, order: Order) -> None:
     session.flush()
 
 
+@dataclass
+class Quote:
+    """A basket judged as a whole: the lines it would make and what it refuses."""
+
+    lines: list[OrderLine] = field(default_factory=list)
+    refused: dict[str, list[str]] = field(default_factory=dict)
+
+    @property
+    def total_cents(self) -> int:
+        return sum(line.amount_cents for line in self.lines)
+
+
+def quote(session: Session, member: Member, product_ids: list[int], day: date) -> Quote:
+    """Price a basket, counting what each product would grant toward the others.
+
+    Raises OrderRefused when the basket itself is malformed: empty, a product
+    listed twice (every product is bought once; a multi-visit pass is its
+    own product), or a product that does not exist or is retired. Refusals
+    of eligible products are reported per product in the quote.
+    """
+    if not product_ids:
+        raise OrderRefused({"order": ["nothing selected"]})
+    repeated = sorted({pid for pid in product_ids if product_ids.count(pid) > 1})
+    if repeated:
+        raise OrderRefused({"order": [f"product {pid} listed twice" for pid in repeated]})
+    products = session.scalars(
+        select(Product)
+        .where(Product.id.in_(product_ids), Product.active.is_(True))
+        .options(
+            selectinload(Product.prices), selectinload(Product.rules), selectinload(Product.grants)
+        )
+    ).all()
+    found = {product.id: product for product in products}
+    missing = [pid for pid in product_ids if pid not in found]
+    if missing:
+        raise OrderRefused({"order": [f"unknown product {pid}" for pid in missing]})
+
+    ordered = [found[pid] for pid in product_ids]
+    results = evaluate_basket(ordered, facts_for(session, member), day)
+    quoted = Quote()
+    for product in ordered:
+        result = results[product.id]
+        if not result.purchasable:
+            quoted.refused[product.name] = list(result.failures) or ["not on sale today"]
+            continue
+        quoted.lines.append(
+            OrderLine(
+                product_id=product.id,
+                price_id=result.price.id,
+                product_name=product.name,
+                amount_cents=result.price.amount_cents,
+            )
+        )
+    return quoted
+
+
 def place_order(
     session: Session,
     member: Member,
@@ -54,44 +111,17 @@ def place_order(
     day: date,
     created_by: Member | None = None,
 ) -> Order:
-    """Judge every product, snapshot prices, and either pay now or await the card."""
-    if not product_ids:
-        raise OrderRefused({"order": ["nothing selected"]})
-    products = session.scalars(
-        select(Product)
-        .where(Product.id.in_(product_ids), Product.active.is_(True))
-        .options(selectinload(Product.prices), selectinload(Product.rules))
-    ).all()
-    found = {product.id: product for product in products}
-    missing = [pid for pid in product_ids if pid not in found]
-    if missing:
-        raise OrderRefused({"order": [f"unknown product {pid}" for pid in missing]})
-
-    facts = facts_for(session, member)
-    refused: dict[str, list[str]] = {}
-    lines: list[OrderLine] = []
-    for pid in product_ids:
-        product = found[pid]
-        result = evaluate(product, facts, day)
-        if not result.purchasable:
-            refused[product.name] = list(result.failures) or ["not on sale today"]
-            continue
-        lines.append(
-            OrderLine(
-                product_id=product.id,
-                price_id=result.price.id,
-                product_name=product.name,
-                amount_cents=result.price.amount_cents,
-            )
-        )
-    if refused:
-        raise OrderRefused(refused)
+    """Judge the basket, snapshot prices, and either pay now or await the card."""
+    quoted = quote(session, member, product_ids, day)
+    if quoted.refused:
+        raise OrderRefused(quoted.refused)
+    lines = quoted.lines
 
     order = Order(
         member_id=member.id,
         status=OrderStatus.PENDING_PAYMENT,
         payment_method=payment_method,
-        total_cents=sum(line.amount_cents for line in lines),
+        total_cents=quoted.total_cents,
         currency=CURRENCY,
         created_by_member_id=created_by.id if created_by else None,
         lines=lines,

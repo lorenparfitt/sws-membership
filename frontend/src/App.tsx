@@ -1,5 +1,6 @@
 import { BrowserRouter, Link, Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth";
+import { BasketProvider, useBasket } from "./basket";
 import { Account } from "./pages/Account";
 import { AdminLayout } from "./pages/admin/AdminLayout";
 import { CatalogAdmin } from "./pages/admin/CatalogAdmin";
@@ -9,6 +10,7 @@ import { Catalog } from "./pages/Catalog";
 import { Checkout } from "./pages/Checkout";
 import { Kiosk } from "./pages/Kiosk";
 import { MemberDetail } from "./pages/MemberDetail";
+import { OrderPage } from "./pages/Order";
 import { Orders } from "./pages/Orders";
 import { Passes } from "./pages/Passes";
 import { PayWindow } from "./pages/PayWindow";
@@ -18,6 +20,7 @@ import "./styles.css";
 
 function Layout() {
   const { me, signOut } = useAuth();
+  const basket = useBasket();
   return (
     <>
       <header>
@@ -28,6 +31,7 @@ function Layout() {
           {me ? (
             <>
               <Link to="/">Catalog</Link>
+              <Link to="/checkout">Basket{basket.ids.length > 0 && ` (${basket.ids.length})`}</Link>
               <Link to="/passes">My passes</Link>
               <Link to="/orders">Orders</Link>
               <Link to="/waiver">Waiver</Link>
@@ -59,13 +63,15 @@ function RequireMember() {
 export function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <Routes>
+      <BasketProvider>
+        <BrowserRouter>
+          <Routes>
           <Route element={<Layout />}>
             <Route path="/sign-in" element={<SignIn />} />
             <Route element={<RequireMember />}>
               <Route path="/" element={<Catalog />} />
-              <Route path="/checkout/:orderId" element={<Checkout />} />
+              <Route path="/checkout" element={<Checkout />} />
+              <Route path="/orders/:orderId" element={<OrderPage />} />
               <Route path="/passes" element={<Passes />} />
               <Route path="/orders" element={<Orders />} />
               <Route path="/account" element={<Account />} />
@@ -80,8 +86,9 @@ export function App() {
               </Route>
             </Route>
           </Route>
-        </Routes>
-      </BrowserRouter>
+          </Routes>
+        </BrowserRouter>
+      </BasketProvider>
     </AuthProvider>
   );
 }

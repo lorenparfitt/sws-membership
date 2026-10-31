@@ -15,6 +15,7 @@ from sws_membership.auth.dependencies import (
     MailerDependency,
     require_role,
 )
+from sws_membership.catalog.models import CURRENCY
 from sws_membership.catalog.router import CurrentDay
 from sws_membership.members.models import Member, MemberRole
 from sws_membership.orders import service
@@ -44,6 +45,35 @@ class StaffOrder(NewOrder):
 class LineView(BaseModel):
     product_name: str
     amount_cents: int
+
+
+class QuoteLineView(LineView):
+    product_id: int
+
+
+class QuoteView(BaseModel):
+    """A basket priced as a whole, before any order exists."""
+
+    lines: list[QuoteLineView]
+    refused: dict[str, list[str]]
+    total_cents: int
+    currency: str
+
+    @classmethod
+    def of(cls, quoted: service.Quote) -> "QuoteView":
+        return cls(
+            lines=[
+                QuoteLineView(
+                    product_id=l.product_id,
+                    product_name=l.product_name,
+                    amount_cents=l.amount_cents,
+                )
+                for l in quoted.lines
+            ],
+            refused=quoted.refused,
+            total_cents=quoted.total_cents,
+            currency=CURRENCY,
+        )
 
 
 class CheckoutView(BaseModel):
@@ -129,6 +159,16 @@ def _reopen(processor: PaymentProcessor, order: Order) -> OrderView:
     return OrderView.of(order, processor.open_checkout(order.id, order.total_cents, order.currency))
 
 
+@router.post("/orders/quote")
+def quote_basket(
+    body: NewOrder, session: DatabaseSession, member: CurrentMember, today: CurrentDay
+) -> QuoteView:
+    try:
+        return QuoteView.of(service.quote(session, member, body.product_ids, today))
+    except service.OrderRefused as problem:
+        raise _refused(problem)
+
+
 @router.post("/orders", status_code=status.HTTP_201_CREATED)
 def place_order(
     body: NewOrder,
@@ -178,6 +218,23 @@ def cancel_order(order_id: int, session: DatabaseSession, member: CurrentMember)
 
 
 StaffMember = Annotated[Member, Depends(require_role(MemberRole.STAFF))]
+
+
+class StaffQuote(NewOrder):
+    member_id: int
+
+
+@router.post("/staff/orders/quote")
+def staff_quote_basket(
+    body: StaffQuote, session: DatabaseSession, today: CurrentDay, staff: StaffMember
+) -> QuoteView:
+    member = session.get(Member, body.member_id)
+    if member is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such member")
+    try:
+        return QuoteView.of(service.quote(session, member, body.product_ids, today))
+    except service.OrderRefused as problem:
+        raise _refused(problem)
 
 
 @router.post("/staff/orders", status_code=status.HTTP_201_CREATED)

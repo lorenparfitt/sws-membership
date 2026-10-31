@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api, ApiError, money, type MemberDetail as Detail, type StaffProfileBody } from "../api";
+import { api, ApiError, money, refusalText, type MemberDetail as Detail, type Quote, type StaffProfileBody } from "../api";
 import { useAuth } from "../auth";
 import { statusLabel } from "./Orders";
 
@@ -32,6 +32,21 @@ export function MemberDetail() {
   const [photoVersion, setPhotoVersion] = useState(0);
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   const [receipt, setReceipt] = useState<{ id: number; text: string } | null>(null);
+  const [chosen, setChosen] = useState<number[]>([]);
+  const [quote, setQuote] = useState<Quote | null>(null);
+
+  // The till basket, priced by the API with each item counting toward the
+  // others, so membership plus season pass rings up as one sale.
+  useEffect(() => {
+    if (chosen.length === 0) {
+      setQuote(null);
+      return;
+    }
+    api
+      .staffQuote(id, chosen)
+      .then(setQuote)
+      .catch((error) => setNote({ ok: false, text: refusalText(error, "The basket could not be priced.") }));
+  }, [id, chosen]);
 
   const load = useCallback(async () => {
     const d = await api.memberDetail(id);
@@ -94,10 +109,15 @@ export function MemberDetail() {
     setReceipt({ id: orderId, text });
   }
 
-  async function sell(productId: number, method: "cash" | "free" | "card") {
+  function toggle(productId: number) {
+    setChosen((current) => (current.includes(productId) ? current.filter((v) => v !== productId) : [...current, productId]));
+  }
+
+  async function sell(method: "cash" | "free" | "card") {
     setNote(null);
     try {
-      const order = await api.staffOrder(id, [productId], method);
+      const order = await api.staffOrder(id, chosen, method);
+      setChosen([]);
       if (method === "card" && order.checkout) {
         // The processor session goes to the popup through sessionStorage, never the URL.
         sessionStorage.setItem(`checkout:${order.id}`, JSON.stringify(order.checkout));
@@ -107,12 +127,7 @@ export function MemberDetail() {
       await load();
       setNote({ ok: true, text: `Order ${order.id} ${order.status}, ${money(order.total_cents)} ${method}.` });
     } catch (error) {
-      if (error instanceof ApiError && error.status === 409) {
-        const refused = (error.detail as { refused: Record<string, string[]> }).refused;
-        setNote({ ok: false, text: Object.values(refused).flat().join(". ") });
-      } else {
-        setNote({ ok: false, text: "Could not place the order." });
-      }
+      setNote({ ok: false, text: refusalText(error, "Could not place the order.") });
     }
   }
 
@@ -211,30 +226,49 @@ export function MemberDetail() {
           Cash taken at the counter, free, or card. Card opens the payment window for the member to
           enter their own card; card details never pass through this screen.
         </p>
-        <ul className="sell">
-          {detail.catalog.map((product) => (
-            <li key={product.id}>
-              <span>
-                <strong>{product.name}</strong>{" "}
-                {product.price ? money(product.price.amount_cents) : <span className="label">no price today</span>}
-                {product.locked_because.length > 0 && (
-                  <span className="problem"> · {product.locked_because.join("; ")}</span>
-                )}
-              </span>
+        <ul className="till">
+          {detail.catalog.map((product) => {
+            const picked = chosen.includes(product.id);
+            const line = quote?.lines.find((l) => l.product_id === product.id);
+            const why = picked ? quote?.refused[product.name] : product.locked_because;
+            return (
+              <li key={product.id}>
+                <input type="checkbox" checked={picked} onChange={() => toggle(product.id)} id={`till-${product.id}`} />
+                <label htmlFor={`till-${product.id}`} style={{ margin: 0 }}>
+                  <strong>{product.name}</strong>
+                </label>
+                <span>
+                  {line
+                    ? money(line.amount_cents)
+                    : product.price
+                      ? money(product.price.amount_cents)
+                      : <span className="label">no price today</span>}
+                </span>
+                {why && why.length > 0 && <span className="why">{why.join("; ")}</span>}
+              </li>
+            );
+          })}
+        </ul>
+        {(() => {
+          const refused = quote ? Object.keys(quote.refused).length > 0 : false;
+          const ready = chosen.length > 0 && quote !== null && !refused && quote.lines.length > 0;
+          return (
+            <div className="till-total">
+              <strong>{quote ? `Total ${money(quote.total_cents)}` : "Nothing selected"}</strong>
               <span className="actions">
-                <button disabled={!product.purchasable} onClick={() => void sell(product.id, "cash")}>
+                <button disabled={!ready} onClick={() => void sell("cash")}>
                   Cash
                 </button>
-                <button className="secondary" disabled={!product.purchasable} onClick={() => void sell(product.id, "free")}>
+                <button className="secondary" disabled={!ready} onClick={() => void sell("free")}>
                   Free
                 </button>
-                <button className="secondary" disabled={!product.purchasable} onClick={() => void sell(product.id, "card")}>
+                <button className="secondary" disabled={!ready} onClick={() => void sell("card")}>
                   Card
                 </button>
               </span>
-            </li>
-          ))}
-        </ul>
+            </div>
+          );
+        })()}
       </div>
 
       <form className="card" onSubmit={saveProfile}>

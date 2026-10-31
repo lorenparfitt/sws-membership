@@ -78,16 +78,40 @@ def test_an_ineligible_product_refuses_the_whole_order(session, catalog):
     assert session.scalars(select(Order)).all() == []
 
 
-def test_the_gate_opens_within_one_order_only_after_payment(session, catalog):
-    """Membership and shuttle in one basket: the shuttle is still gated."""
+def test_a_membership_in_the_same_basket_opens_the_gate_and_the_member_price(session, catalog):
+    """Membership and shuttle in one basket: the membership counts, whichever order."""
     member = _member(session, "basket@example.com")
     membership = _product(session, "Adult SWS Membership")
     shuttle = _product(session, "Member Day Shuttle Pass")
-    with pytest.raises(service.OrderRefused):
-        service.place_order(session, member, [membership.id, shuttle.id], PaymentMethod.CASH, TODAY)
-    service.place_order(session, member, [membership.id], PaymentMethod.CASH, TODAY)
-    order = service.place_order(session, member, [shuttle.id], PaymentMethod.CASH, TODAY)
-    assert order.total_cents == 2500
+    with pytest.raises(service.OrderRefused) as refused:
+        service.place_order(session, member, [shuttle.id], PaymentMethod.CASH, TODAY)
+    assert f"Needs an active {YEAR} membership" in refused.value.reasons[shuttle.name]
+
+    quoted = service.quote(session, member, [shuttle.id, membership.id], TODAY)
+    assert quoted.refused == {}
+    assert [(l.product_name, l.amount_cents) for l in quoted.lines] == [
+        (shuttle.name, 2500),
+        (membership.name, 4000),
+    ]
+
+    order = service.place_order(
+        session, member, [shuttle.id, membership.id], PaymentMethod.CASH, TODAY
+    )
+    assert order.total_cents == 6500
+    kinds = sorted(e.kind.value for e in _entitlements(session, member))
+    assert kinds == ["membership", "shuttle_access"]
+
+    # Bought once, the membership is now held for real and refuses a repeat.
+    again = service.quote(session, member, [membership.id], TODAY)
+    assert again.refused == {membership.name: ["Already held for this season"]}
+
+
+def test_a_basket_lists_every_product_once(session, catalog):
+    member = _member(session, "twice@example.com")
+    day_pass = _product(session, "Day Pass")
+    with pytest.raises(service.OrderRefused) as refused:
+        service.quote(session, member, [day_pass.id, day_pass.id], TODAY)
+    assert refused.value.reasons == {"order": [f"product {day_pass.id} listed twice"]}
 
 
 def _notification(order, approved=True, transaction_id="tx-1", amount=None) -> PaymentNotification:
@@ -336,3 +360,31 @@ def test_order_history_actions_are_scoped_to_the_owner_or_staff(session, client,
     assert client.post(f"/api/staff/orders/{order_id}/checkout").status_code == 200
     assert client.post(f"/api/staff/orders/{order_id}/cancel").json()["status"] == "cancelled"
     assert client.get(f"/api/staff/orders/{order_id}/receipt").status_code == 409
+
+
+def test_the_quote_route_prices_a_basket_without_creating_an_order(session, client, catalog):
+    member = _member(session, "quote@example.com")
+    _sign_in(session, client, member)
+    membership = _product(session, "Adult SWS Membership")
+    shuttle = _product(session, "Member Day Shuttle Pass")
+    youth = _product(session, "Youth SWS Membership")
+
+    alone = client.post("/api/orders/quote", json={"product_ids": [shuttle.id]}).json()
+    assert alone["lines"] == [] and alone["total_cents"] == 0
+    assert f"Needs an active {YEAR} membership" in alone["refused"][shuttle.name]
+
+    both = client.post(
+        "/api/orders/quote", json={"product_ids": [membership.id, shuttle.id, youth.id]}
+    ).json()
+    assert [l["product_id"] for l in both["lines"]] == [membership.id, shuttle.id]
+    assert both["total_cents"] == 6500 and both["currency"] == "CAD"
+    assert both["refused"] == {youth.name: ["For members 18 and under"]}
+    assert client.get("/api/orders").json() == []
+
+    clerk = _member(session, "clerk3@example.com", roles=[MemberRole.STAFF])
+    _sign_in(session, client, clerk)
+    staff = client.post(
+        "/api/staff/orders/quote",
+        json={"member_id": member.id, "product_ids": [membership.id, shuttle.id]},
+    ).json()
+    assert staff["total_cents"] == 6500

@@ -58,6 +58,13 @@ export interface Checkout {
   parameters: Record<string, string>;
 }
 
+export interface Quote {
+  lines: { product_id: number; product_name: string; amount_cents: number }[];
+  refused: Record<string, string[]>;
+  total_cents: number;
+  currency: string;
+}
+
 export interface Order {
   id: number;
   status: string;
@@ -289,7 +296,10 @@ export const api = {
     request<Me>("/api/auth/password", { method: "POST", body: JSON.stringify({ email, password }) }),
   setPassword: (password: string) =>
     request<void>("/api/auth/set-password", { method: "POST", body: JSON.stringify({ password }) }),
-  catalog: () => request<Product[]>("/api/catalog"),
+  catalog: (basket: number[] = []) =>
+    request<Product[]>(`/api/catalog${basket.length ? "?" + basket.map((id) => `basket=${id}`).join("&") : ""}`),
+  quote: (productIds: number[]) =>
+    request<Quote>("/api/orders/quote", { method: "POST", body: JSON.stringify({ product_ids: productIds }) }),
   placeOrder: (productIds: number[]) =>
     request<Order>("/api/orders", { method: "POST", body: JSON.stringify({ product_ids: productIds }) }),
   order: (id: number) => request<Order>(`/api/orders/${id}`),
@@ -320,6 +330,11 @@ export const api = {
   setRoles: (id: number, roles: string[]) =>
     request<MemberDetail>(`/api/staff/members/${id}/roles`, { method: "PUT", body: JSON.stringify({ roles }) }),
   staffOrderStatus: (id: number) => request<Order>(`/api/staff/orders/${id}`),
+  staffQuote: (memberId: number, productIds: number[]) =>
+    request<Quote>("/api/staff/orders/quote", {
+      method: "POST",
+      body: JSON.stringify({ member_id: memberId, product_ids: productIds }),
+    }),
   staffReopenCheckout: (id: number) => request<Order>(`/api/staff/orders/${id}/checkout`, { method: "POST" }),
   staffCancelOrder: (id: number) => request<Order>(`/api/staff/orders/${id}/cancel`, { method: "POST" }),
   staffReceipt: (id: number) => text(`/api/staff/orders/${id}/receipt`),
@@ -341,6 +356,15 @@ export const api = {
   signWaiver: (body: WaiverSignature) =>
     request<Waiver>("/api/waiver/sign", { method: "POST", body: JSON.stringify(body) }),
 };
+
+export function refusalText(error: unknown, fallback: string): string {
+  if (error instanceof ApiError && error.status === 409) {
+    const detail = error.detail as { refused?: Record<string, string[]> } | string;
+    if (typeof detail === "string") return detail;
+    if (detail?.refused) return Object.values(detail.refused).flat().join(". ");
+  }
+  return fallback;
+}
 
 export function money(cents: number, currency = "CAD"): string {
   return new Intl.NumberFormat("en-CA", { style: "currency", currency }).format(cents / 100);

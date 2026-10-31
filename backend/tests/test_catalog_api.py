@@ -111,3 +111,21 @@ def test_a_youth_is_offered_youth_products_only(session, client):
     assert body[f"Youth Season Pass {YEAR}"]["purchasable"] is True
     assert body[f"Adult Season Pass {YEAR}"]["locked_because"] == ["For members 19 and over"]
     assert body[f"Day Pass {YEAR}"]["purchasable"] is True
+
+
+def test_a_membership_in_the_basket_unlocks_the_shuttle_pass_before_payment(session, client):
+    load_sample_catalog(session, YEAR)
+    _signed_in(session, client, date(1990, 1, 1))
+    membership = session.scalars(
+        select(Product).where(Product.name == f"Adult SWS Membership {YEAR}")
+    ).one()
+
+    body = _by_name(client.get("/api/catalog", params={"basket": [membership.id]}).json())
+    shuttle = body[f"Member Day Shuttle Pass {YEAR}"]
+    assert shuttle["purchasable"] is True
+    assert shuttle["price"]["amount_cents"] == 2500
+    # The membership itself is judged without its own grant: still purchasable.
+    assert body[f"Adult SWS Membership {YEAR}"]["purchasable"] is True
+
+    without = _by_name(client.get("/api/catalog").json())
+    assert without[f"Member Day Shuttle Pass {YEAR}"]["purchasable"] is False

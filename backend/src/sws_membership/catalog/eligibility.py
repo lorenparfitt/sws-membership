@@ -15,14 +15,67 @@ from sws_membership.entitlements.models import Entitlement, EntitlementKind
 
 
 @dataclass(frozen=True)
+class PendingEntitlement:
+    """What a product in the basket would grant once paid, judged as if held.
+
+    Shaped like an Entitlement for the checkers, so a membership in the same
+    basket unlocks the season pass next to it and earns its member price.
+    """
+
+    kind: EntitlementKind
+    product: Product
+    valid_from: date
+    valid_to: date
+    visits_remaining: int | None
+
+    @property
+    def product_id(self) -> int:
+        return self.product.id
+
+    def is_active_on(self, day: date) -> bool:
+        if not (self.valid_from <= day <= self.valid_to):
+            return False
+        if self.kind is EntitlementKind.DAY_VISITS:
+            return (self.visits_remaining or 0) > 0
+        return True
+
+
+def would_grant(product: Product) -> tuple[PendingEntitlement, ...]:
+    return tuple(
+        PendingEntitlement(
+            kind=grant.kind,
+            product=product,
+            valid_from=grant.valid_from,
+            valid_to=grant.valid_to,
+            visits_remaining=grant.visit_count,
+        )
+        for grant in product.grants
+    )
+
+
+Held = Entitlement | PendingEntitlement
+
+
+@dataclass(frozen=True)
 class MemberFacts:
     date_of_birth: date | None
-    entitlements: tuple[Entitlement, ...] = ()
+    entitlements: tuple[Held, ...] = ()
     has_current_waiver: bool = False
     profile_complete: bool = True
 
-    def active_entitlements(self, day: date) -> list[Entitlement]:
+    def active_entitlements(self, day: date) -> list[Held]:
         return [e for e in self.entitlements if e.is_active_on(day)]
+
+    def holding(self, pending: tuple[PendingEntitlement, ...]) -> "MemberFacts":
+        """The same member, counting what the basket would grant as held."""
+        if not pending:
+            return self
+        return MemberFacts(
+            date_of_birth=self.date_of_birth,
+            entitlements=self.entitlements + pending,
+            has_current_waiver=self.has_current_waiver,
+            profile_complete=self.profile_complete,
+        )
 
     def is_member_on(self, day: date) -> bool:
         return any(e.kind is EntitlementKind.MEMBERSHIP for e in self.active_entitlements(day))
@@ -105,3 +158,32 @@ def evaluate(product: Product, facts: MemberFacts, day: date) -> Eligibility:
         if not CHECKERS[rule.kind](rule, product, facts, day)
     )
     return Eligibility(price=price, failures=failures)
+
+
+def evaluate_basket(
+    products: list[Product], facts: MemberFacts, day: date
+) -> dict[int, Eligibility]:
+    """Judge every product in a basket, each one counting the others as held.
+
+    A product is judged against the member's real entitlements plus what the
+    other purchasable products in the basket would grant, never its own
+    grants (or one-per-season would refuse it). Settles by repetition: a
+    product that fails alone can pass once the membership beside it counts.
+    """
+    results: dict[int, Eligibility] = {}
+    for _ in range(len(products) + 1):
+        pending = {
+            p.id: would_grant(p)
+            for p in products
+            if results.get(p.id, Eligibility(None)).purchasable
+        }
+        judged = {}
+        for product in products:
+            others = tuple(
+                e for pid, grants in pending.items() if pid != product.id for e in grants
+            )
+            judged[product.id] = evaluate(product, facts.holding(others), day)
+        if judged == results:
+            break
+        results = judged
+    return results

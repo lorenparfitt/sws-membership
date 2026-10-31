@@ -50,7 +50,7 @@ export function Orders() {
                   <span className="label">Started {new Date(order.created_at).toLocaleString()}</span>
                 </span>
                 <span className="actions">
-                  <Link to={`/checkout/${order.id}`}>Continue to payment</Link>
+                  <Link to={`/orders/${order.id}`}>Continue to payment</Link>
                   <button className="link" onClick={() => void cancel(order.id)}>
                     Cancel
                   </button>

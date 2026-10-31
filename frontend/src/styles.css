@@ -96,3 +96,13 @@ textarea { display: block; width: 100%; margin-top: 0.25rem; padding: 0.5rem 0.6
 .report-list li.chosen { background: var(--page); }
 @media (max-width: 48rem) { .reports { grid-template-columns: 1fr; } }
 .receipt { white-space: pre-wrap; font: 0.9rem/1.4 ui-monospace, monospace; background: var(--page); border-radius: 8px; padding: 0.75rem 1rem; margin: 0; }
+.basket-bar { position: sticky; bottom: 0; margin-top: 1rem; display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; padding: 0.75rem 1rem; background: var(--card); border: 1px solid var(--rule); border-radius: 10px; box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.08); }
+a.button { display: inline-block; padding: 0.5rem 0.9rem; border-radius: 6px; background: var(--accent); color: #fff; text-decoration: none; }
+td.num, th.num { text-align: right; white-space: nowrap; }
+.problem-banner { border-color: var(--problem); margin-bottom: 1rem; }
+.problem-banner p { margin: 0 0 0.25rem; }
+.till { list-style: none; padding: 0; margin: 0 0 0.75rem; }
+.till li { display: flex; gap: 0.75rem; align-items: baseline; padding: 0.4rem 0; border-bottom: 1px solid var(--rule); flex-wrap: wrap; }
+.till input { width: auto; margin: 0; }
+.till .why { color: var(--problem); font-size: 0.9rem; }
+.till-total { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }

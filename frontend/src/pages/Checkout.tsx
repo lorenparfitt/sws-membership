@@ -1,84 +1,112 @@
-import { useCallback, useEffect, useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { api, money, type Checkout as CheckoutSession, type Order } from "../api";
-import { CardForm } from "../CardForm";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { api, money, refusalText, type Quote } from "../api";
+import { useBasket } from "../basket";
 
+// Review the basket as the API prices it, then make an order of it. Nothing
+// is created until Pay by card; the order page then collects the payment.
 export function Checkout() {
-  const { orderId } = useParams();
-  const id = Number(orderId);
-  const location = useLocation();
+  const basket = useBasket();
   const navigate = useNavigate();
-  const [session, setSession] = useState<CheckoutSession | null>(
-    (location.state as { checkout?: CheckoutSession } | null)?.checkout ?? null,
-  );
-  const [order, setOrder] = useState<Order | null>(null);
+  const [quote, setQuote] = useState<Quote | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
-
-  const refresh = useCallback(() => api.order(id).then(setOrder).catch(() => setProblem("Order not found.")), [id]);
+  const [placing, setPlacing] = useState(false);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  // Poll while the processor's notification is on its way.
-  useEffect(() => {
-    if (!order || order.status !== "pending_payment") return;
-    const timer = setInterval(() => void refresh(), 3000);
-    return () => clearInterval(timer);
-  }, [order, refresh]);
-
-  // Arrived without a session (reload, closed form, link from the orders
-  // page): ask for a fresh one. The order itself is unchanged.
-  useEffect(() => {
-    if (session || !order || order.status !== "pending_payment" || order.payment_method !== "card") return;
+    if (basket.ids.length === 0) {
+      setQuote(null);
+      return;
+    }
     api
-      .reopenCheckout(id)
-      .then((reopened) => setSession(reopened.checkout))
-      .catch(() => setProblem("The payment form could not be reopened."));
-  }, [session, order, id]);
+      .quote(basket.ids)
+      .then((q) => {
+        setQuote(q);
+        setProblem(null);
+      })
+      .catch((error) => setProblem(refusalText(error, "The basket could not be priced.")));
+  }, [basket.ids]);
 
-  async function cancel() {
-    if (!window.confirm("Cancel this order? Nothing has been charged.")) return;
-    await api.cancelOrder(id).catch(() => setProblem("The order could not be cancelled."));
-    navigate("/orders");
+  async function pay() {
+    setPlacing(true);
+    setProblem(null);
+    try {
+      const order = await api.placeOrder(basket.ids);
+      basket.clear();
+      navigate(`/orders/${order.id}`, { state: { checkout: order.checkout } });
+    } catch (error) {
+      setProblem(refusalText(error, "Could not start the purchase."));
+      setPlacing(false);
+    }
   }
 
-  if (!order) return <p>{problem ?? "Loading…"}</p>;
+  if (basket.ids.length === 0) {
+    return (
+      <section className="card narrow">
+        <h2>Checkout</h2>
+        <p>
+          Your basket is empty. <Link to="/">Choose passes</Link>
+        </p>
+      </section>
+    );
+  }
+  if (!quote) return <p>{problem ?? "Pricing your basket…"}</p>;
+
+  const refused = Object.entries(quote.refused);
+  const byName = new Map(quote.lines.map((l) => [l.product_name, l]));
+  const idOf = (name: string) => byName.get(name)?.product_id;
 
   return (
     <section className="card narrow">
-      <h2>Order {order.id}</h2>
-      <ul>
-        {order.lines.map((line) => (
-          <li key={line.product_name}>
-            {line.product_name} <strong>{money(line.amount_cents, order.currency)}</strong>
-          </li>
-        ))}
-      </ul>
-      <p className="price">Total {money(order.total_cents, order.currency)}</p>
+      <h2>Checkout</h2>
+      {refused.length > 0 && (
+        <div className="banner problem-banner">
+          <p>These items cannot be bought today. Remove them to continue.</p>
+          <ul className="reasons">
+            {refused.map(([name, reasons]) => (
+              <li key={name}>
+                <strong>{name}</strong>: {reasons.join("; ")}{" "}
+                <button className="link" onClick={() => void removeByName(name)}>
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <table>
+        <tbody>
+          {quote.lines.map((line) => (
+            <tr key={line.product_id}>
+              <td>{line.product_name}</td>
+              <td className="num">{money(line.amount_cents, quote.currency)}</td>
+              <td>
+                <button className="link" onClick={() => basket.remove(line.product_id)}>
+                  Remove
+                </button>
+              </td>
+            </tr>
+          ))}
+          <tr>
+            <th>Total</th>
+            <th className="num">{money(quote.total_cents, quote.currency)}</th>
+            <th></th>
+          </tr>
+        </tbody>
+      </table>
       {problem && <p className="problem">{problem}</p>}
-
-      {order.status === "paid" && (
-        <p className="ok">
-          Paid. Your passes are ready. <Link to="/passes">See my passes</Link>
-        </p>
-      )}
-      {order.status === "cancelled" && <p className="inactive">This order was cancelled.</p>}
-
-      {order.status === "pending_payment" && (
-        <>
-          {session ? (
-            <CardForm orderId={order.id} session={session} onResult={refresh} />
-          ) : (
-            <p>Opening the payment form…</p>
-          )}
-          <p className="actions">
-            <button className="link" onClick={() => void cancel()}>
-              Cancel this order
-            </button>
-          </p>
-        </>
-      )}
+      <p className="label">A receipt goes to your email once the payment is confirmed.</p>
+      <p className="actions">
+        <button disabled={placing || refused.length > 0 || quote.lines.length === 0} onClick={() => void pay()}>
+          {placing ? "Starting…" : `Pay ${money(quote.total_cents, quote.currency)} by card`}
+        </button>
+        <Link to="/">Back to the catalog</Link>
+      </p>
     </section>
   );
+
+  async function removeByName(name: string) {
+    // Refused products are reported by name; find the id from the catalog.
+    const id = idOf(name) ?? (await api.catalog(basket.ids)).find((p) => p.name === name)?.id;
+    if (id !== undefined) basket.remove(id);
+  }
 }

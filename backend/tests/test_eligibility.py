@@ -2,8 +2,14 @@
 
 from datetime import date
 
-from sws_membership.catalog.eligibility import MemberFacts, evaluate
-from sws_membership.catalog.models import EligibilityRule, Price, Product, RuleKind
+from sws_membership.catalog.eligibility import MemberFacts, evaluate, evaluate_basket
+from sws_membership.catalog.models import (
+    EligibilityRule,
+    EntitlementGrant,
+    Price,
+    Product,
+    RuleKind,
+)
 from sws_membership.entitlements.models import Entitlement, EntitlementKind
 
 TODAY = date(2026, 6, 15)
@@ -118,3 +124,41 @@ def test_day_visits_entitlement_is_active_only_while_visits_remain():
     unspent = _entitlement(EntitlementKind.DAY_VISITS, visits=1)
     assert not spent.is_active_on(TODAY)
     assert unspent.is_active_on(TODAY)
+
+
+def test_a_basket_counts_what_its_other_products_would_grant():
+    membership = _product(
+        rules=[(RuleKind.ONE_PER_MEMBER_PER_SEASON, {}, "already held")], product_id=1
+    )
+    membership.grants = [
+        EntitlementGrant(kind=EntitlementKind.MEMBERSHIP, valid_from=SEASON[0], valid_to=SEASON[1])
+    ]
+    season_pass = _product(
+        rules=[
+            (
+                RuleKind.REQUIRES_ACTIVE_ENTITLEMENT,
+                {"kind": "membership", "season_year": 2026},
+                "needs a membership",
+            )
+        ],
+        prices=[
+            Price(label="Regular", amount_cents=1000, starts_at=date(2026, 3, 1), ends_at=None),
+            Price(
+                label="Member",
+                amount_cents=700,
+                starts_at=date(2026, 3, 1),
+                ends_at=None,
+                members_only=True,
+            ),
+        ],
+        product_id=2,
+    )
+    season_pass.grants = []
+    facts = MemberFacts(date_of_birth=date(1990, 1, 1))
+
+    assert evaluate(season_pass, facts, TODAY).failures == ("needs a membership",)
+
+    judged = evaluate_basket([season_pass, membership], facts, TODAY)
+    assert judged[2].purchasable and judged[2].price.amount_cents == 700
+    # Its own grant never counts against the membership.
+    assert judged[1].purchasable
