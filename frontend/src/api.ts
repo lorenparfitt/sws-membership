@@ -117,6 +117,44 @@ export interface CheckInResult {
   member: GateMember;
 }
 
+export interface Profile {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string | null;
+  date_of_birth: string | null;
+  address_line_1: string | null;
+  address_line_2: string | null;
+  city: string | null;
+  province: string | null;
+  postal_code: string | null;
+  sports: string[];
+  has_photo: boolean;
+  missing: string[];
+}
+
+export interface ProfileBody {
+  first_name: string;
+  last_name: string;
+  phone: string;
+  date_of_birth: string | null;
+  address_line_1: string;
+  address_line_2: string;
+  city: string;
+  province: string;
+  postal_code: string;
+  sports: string[];
+}
+
+async function upload<T>(path: string, file: File): Promise<T> {
+  const form = new FormData();
+  form.append("photo", file);
+  const response = await fetch(path, { method: "POST", credentials: "same-origin", body: form });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) throw new ApiError(response.status, body?.detail ?? body);
+  return body as T;
+}
+
 export const api = {
   me: () => request<Me>("/api/auth/me"),
   requestLink: (email: string) =>
@@ -135,6 +173,13 @@ export const api = {
   fakeApprove: (id: number) => request<{ status: string }>(`/api/payments/fake/approve/${id}`, { method: "POST" }),
   entitlements: () => request<Entitlement[]>("/api/entitlements"),
   waiver: () => request<Waiver>("/api/waiver"),
+  sports: () => request<{ value: string; label: string }[]>("/api/sports"),
+  profile: () => request<Profile>("/api/me/profile"),
+  updateProfile: (body: ProfileBody) =>
+    request<Profile>("/api/me/profile", { method: "PUT", body: JSON.stringify(body) }),
+  uploadMyPhoto: (file: File) => upload<Profile>("/api/me/photo", file),
+  uploadMemberPhoto: (memberId: number, file: File) =>
+    upload<Profile>(`/api/staff/members/${memberId}/photo`, file),
   kioskLookup: (q: string) => request<GateMember[]>(`/api/staff/kiosk/lookup?q=${encodeURIComponent(q)}`),
   kioskCheckIn: (memberId: number, station: "spit" | "shuttle") =>
     request<CheckInResult>("/api/staff/kiosk/check-in", {
@@ -142,6 +187,16 @@ export const api = {
       body: JSON.stringify({ member_id: memberId, station }),
     }),
   kioskToday: () => request<Record<string, number>>("/api/staff/kiosk/today"),
+  printCards: async (memberIds: number[]): Promise<Blob> => {
+    const response = await fetch("/api/staff/cards/print", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ member_ids: memberIds }),
+    });
+    if (!response.ok) throw new ApiError(response.status, await response.text());
+    return response.blob();
+  },
   signWaiver: (body: WaiverSignature) =>
     request<Waiver>("/api/waiver/sign", { method: "POST", body: JSON.stringify(body) }),
 };

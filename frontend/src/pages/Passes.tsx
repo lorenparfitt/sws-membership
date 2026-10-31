@@ -15,7 +15,10 @@ export function Passes() {
       <h2>My passes</h2>
       {me && (
         <p className="label">
-          Member number <strong>{me.member_number}</strong>. Show this number, or your card, at the Spit.
+          Member number <strong>{me.member_number}</strong>. Show this number, or your card, at the Spit.{" "}
+          <a href="/api/me/card.pdf" target="_blank" rel="noreferrer">
+            Download my card (PDF)
+          </a>
         </p>
       )}
       {!passes ? (

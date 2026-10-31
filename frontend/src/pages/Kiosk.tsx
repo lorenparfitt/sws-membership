@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { api, type CheckInResult, type GateMember } from "../api";
 
 type Station = "spit" | "shuttle";
@@ -33,6 +33,28 @@ export function Kiosk() {
     } finally {
       setQuery("");
       input.current?.focus();
+    }
+  }
+
+  async function photograph(member: GateMember, event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      await api.uploadMemberPhoto(member.id, file);
+      setResults((current) =>
+        current?.map((m) => (m.id === member.id ? { ...m, photo_key: `updated-${Date.now()}` } : m)) ?? null,
+      );
+    } catch {
+      setProblem("Could not save the photo.");
+    }
+  }
+
+  async function printCard(member: GateMember) {
+    try {
+      const blob = await api.printCards([member.id]);
+      window.open(URL.createObjectURL(blob), "_blank");
+    } catch {
+      setProblem("Could not produce the card.");
     }
   }
 
@@ -81,9 +103,22 @@ export function Kiosk() {
         <ul className="products">
           {results.map((member) => (
             <li key={member.id} className="card">
-              <h3>
-                {member.first_name} {member.last_name}
-              </h3>
+              <div className="photo-row">
+                {member.photo_key ? (
+                  <img className="photo" src={`/api/staff/members/${member.id}/photo?v=${member.photo_key}`} alt="" />
+                ) : (
+                  <div className="photo placeholder">No photo</div>
+                )}
+                <div>
+                  <h3>
+                    {member.first_name} {member.last_name}
+                  </h3>
+                  <label className="file small">
+                    {member.photo_key ? "Retake photo" : "Take photo"}
+                    <input type="file" accept="image/*" capture="user" onChange={(e) => void photograph(member, e)} />
+                  </label>
+                </div>
+              </div>
               <p className="label">
                 #{member.member_number} · {member.email}
                 {member.date_of_birth && ` · born ${member.date_of_birth}`}
@@ -106,7 +141,12 @@ export function Kiosk() {
                   Today: {member.today.map((c) => `${c.station} at ${new Date(c.checked_in_at).toLocaleTimeString()}`).join(", ")}
                 </p>
               )}
-              <button onClick={() => void admit(member)}>Check in at {station}</button>
+              <div className="actions">
+                <button onClick={() => void admit(member)}>Check in at {station}</button>
+                <button className="secondary" onClick={() => void printCard(member)}>
+                  Print card
+                </button>
+              </div>
             </li>
           ))}
         </ul>

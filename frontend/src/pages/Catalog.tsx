@@ -63,6 +63,12 @@ export function Catalog() {
                         <Link to="/waiver">Sign it</Link>
                       </>
                     )}
+                    {/profile/i.test(reason) && (
+                      <>
+                        {" "}
+                        <Link to="/account">Go to Account</Link>
+                      </>
+                    )}
                   </li>
                 ))}
               </ul>
