@@ -25,6 +25,7 @@ from sws_membership.entitlements.models import EntitlementKind
 ONCE_RULE = (RuleKind.ONE_PER_MEMBER_PER_SEASON, {}, "Already held for this season")
 ADULT_RULE = (RuleKind.AGE_AT_LEAST, {"years": 19}, "For members 19 and over")
 YOUTH_RULE = (RuleKind.AGE_AT_MOST, {"years": 18}, "For members 18 and under")
+WAIVER_RULE = (RuleKind.REQUIRES_CURRENT_WAIVER, {}, "Sign the current waiver first")
 
 
 def member_only_rule(season_year: int) -> tuple:
@@ -97,7 +98,7 @@ def sample_products(year: int) -> list[dict]:
                 _season(year, EntitlementKind.MEMBERSHIP),
                 _season(year, EntitlementKind.SEASON_ACCESS),
             ],
-            "rules": [ADULT_RULE, ONCE_RULE],
+            "rules": [ADULT_RULE, ONCE_RULE, WAIVER_RULE],
         },
         {
             "name": f"Youth Season Pass {year}",
@@ -108,7 +109,7 @@ def sample_products(year: int) -> list[dict]:
                 _season(year, EntitlementKind.MEMBERSHIP),
                 _season(year, EntitlementKind.SEASON_ACCESS),
             ],
-            "rules": [YOUTH_RULE, ONCE_RULE],
+            "rules": [YOUTH_RULE, ONCE_RULE, WAIVER_RULE],
         },
         {
             "name": f"Day Pass {year}",
@@ -116,7 +117,7 @@ def sample_products(year: int) -> list[dict]:
             "sort_order": 50,
             "prices": _prices(year, regular=3500),
             "grants": [_season(year, EntitlementKind.DAY_VISITS, visits=1)],
-            "rules": [],
+            "rules": [WAIVER_RULE],
         },
         {
             "name": f"Member Day Shuttle Pass {year}",
@@ -124,13 +125,18 @@ def sample_products(year: int) -> list[dict]:
             "sort_order": 60,
             "prices": _prices(year, regular=2500, members_only=True),
             "grants": [_season(year, EntitlementKind.SHUTTLE_ACCESS, visits=1)],
-            "rules": [member_only_rule(year)],
+            "rules": [member_only_rule(year), WAIVER_RULE],
         },
     ]
 
 
 def load_sample_catalog(session: Session, season_year: int | None = None) -> int:
-    """Create any sample product that is missing; return how many were created."""
+    """Create any missing sample product and re-sync the rules of existing ones.
+
+    Returns how many were created. Rules are replaced on existing products so
+    a developer database follows the sample as it changes; prices and grants
+    are left alone because orders already point at them.
+    """
     season_year = season_year or date.today().year
     created = 0
     for spec in sample_products(season_year):
@@ -138,6 +144,10 @@ def load_sample_catalog(session: Session, season_year: int | None = None) -> int
             select(Product).where(Product.name == spec["name"], Product.season_year == season_year)
         ).first()
         if exists:
+            exists.rules = [
+                EligibilityRule(kind=kind, parameters=parameters, failure_message=message)
+                for kind, parameters, message in spec["rules"]
+            ]
             continue
         product = Product(
             name=spec["name"],

@@ -10,6 +10,7 @@ from sws_membership.auth.service import resolve_session
 from sws_membership.database import SessionLocal
 from sws_membership.mail.mailer import Mailer
 from sws_membership.members.models import Member, MemberRole
+from sws_membership.storage.objects import ObjectStorage
 
 SESSION_COOKIE = "sws_session"
 
@@ -24,8 +25,13 @@ def get_mailer(request: Request) -> Mailer:
     return request.app.state.mailer
 
 
+def get_storage(request: Request) -> ObjectStorage:
+    return request.app.state.storage
+
+
 DatabaseSession = Annotated[Session, Depends(get_database_session)]
 MailerDependency = Annotated[Mailer, Depends(get_mailer)]
+StorageDependency = Annotated[ObjectStorage, Depends(get_storage)]
 SessionCookie = Annotated[str | None, Cookie(alias=SESSION_COOKIE)]
 
 

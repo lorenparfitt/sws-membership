@@ -11,5 +11,6 @@ from sws_membership.entitlements import models as entitlement_models  # noqa: F4
 from sws_membership.members import member_numbers  # noqa: F401
 from sws_membership.members import models as member_models  # noqa: F401
 from sws_membership.orders import models as order_models  # noqa: F401
+from sws_membership.waivers import models as waiver_models  # noqa: F401
 
 metadata = Base.metadata

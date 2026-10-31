@@ -1,6 +1,7 @@
 """Wiring only: logging, the FastAPI application, and the mounted routers."""
 
 import logging
+from pathlib import Path
 
 from fastapi import FastAPI
 
@@ -15,6 +16,8 @@ from sws_membership.payments.fake_router import router as fake_payments_router
 from sws_membership.payments.nuvei import NuveiProcessor
 from sws_membership.payments.processor import PaymentProcessor
 from sws_membership.settings import settings
+from sws_membership.storage.objects import LocalDirectoryStorage, ObjectStorage
+from sws_membership.waivers.router import router as waivers_router
 
 
 def configure_logging() -> None:
@@ -39,16 +42,20 @@ def configured_processor() -> PaymentProcessor:
 
 
 def create_application(
-    mailer: Mailer | None = None, payment_processor: PaymentProcessor | None = None
+    mailer: Mailer | None = None,
+    payment_processor: PaymentProcessor | None = None,
+    storage: ObjectStorage | None = None,
 ) -> FastAPI:
     application = FastAPI(title="SWS Membership")
     application.state.mailer = mailer or ConsoleMailer()
+    application.state.storage = storage or LocalDirectoryStorage(Path(settings.storage_directory))
     application.state.payment_processor = payment_processor or configured_processor()
     application.include_router(health_router)
     application.include_router(auth_router)
     application.include_router(catalog_router)
     application.include_router(orders_router)
     application.include_router(entitlements_router)
+    application.include_router(waivers_router)
     if isinstance(application.state.payment_processor, FakeProcessor):
         application.include_router(fake_payments_router)
     return application

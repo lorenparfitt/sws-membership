@@ -86,3 +86,31 @@ def client(session, mailer):
     application.dependency_overrides[get_database_session] = lambda: session
     with TestClient(application) as client:
         yield client
+
+
+def sign_current_waiver(session, member) -> None:
+    """Give a test member a current signature, publishing a template if none exists.
+
+    Writes the row directly: the signing path itself is covered in
+    test_waivers.py, and other suites only need the gate open.
+    """
+    from datetime import UTC, datetime
+
+    from sws_membership.waivers import service
+    from sws_membership.waivers.models import WaiverSignature
+
+    template = service.current_template(session) or service.publish_template(
+        session, "Test waiver", "Test waiver text.", by=None
+    )
+    session.add(
+        WaiverSignature(
+            member_id=member.id,
+            template_id=template.id,
+            signed_at=datetime.now(UTC),
+            ip_address="test",
+            signer_name=f"{member.first_name} {member.last_name}",
+            signature_key="test/signature.png",
+            document_hash=template.document_hash,
+        )
+    )
+    session.flush()

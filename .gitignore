@@ -12,3 +12,4 @@ result
 .doit.json
 tmp/
 frontend/tsconfig.tsbuildinfo
+backend/var/

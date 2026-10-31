@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # Off only for plain-http development. Production is https.
     cookie_secure: bool = False
     log_level: str = "INFO"
+    # Where signature images and card PDFs live in development. Production
+    # swaps in object storage behind the same seam.
+    storage_directory: str = "var/storage"
 
     # Which processor charges cards. The fake one needs no network and is
     # approved by posting to the notification endpoint; production is nuvei.

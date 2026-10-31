@@ -17,6 +17,7 @@ from sws_membership.members.member_numbers import allocate_member_number
 from sws_membership.members.models import Member, MemberRole
 from sws_membership.members.roles import UnknownMember, grant_role, revoke_role
 from sws_membership.members.sample_data import generate_sample_members
+from sws_membership.waivers.sample_data import load_sample_waiver
 
 
 def create_member(arguments: argparse.Namespace) -> None:
@@ -67,8 +68,11 @@ def generate_sample_command(arguments: argparse.Namespace) -> None:
 def seed_catalog_command(arguments: argparse.Namespace) -> None:
     with SessionLocal() as session:
         created = load_sample_catalog(session)
+        waiver = load_sample_waiver(session)
         session.commit()
-    print(f"sample catalog: created {created} products")
+    print(
+        f"sample catalog: created {created} products; placeholder waiver {'published' if waiver else 'already present'}"
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
