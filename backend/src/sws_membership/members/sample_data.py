@@ -10,7 +10,8 @@ import random
 from datetime import date, timedelta
 from pathlib import Path
 
-from sws_membership.members.import_csv import COLUMNS
+from sws_membership.members.import_csv import COLUMNS, OPTIONAL_COLUMNS
+from sws_membership.members.models import Sport
 
 FIRST_NAMES = (
     "Avery",
@@ -71,7 +72,7 @@ def generate_sample_members(path: Path, count: int, seed: int = 2026) -> None:
     numbers = generator.sample(range(MEMBER_NUMBER_LOW, MEMBER_NUMBER_HIGH + 1), count)
     season_start = date(2026, 5, 1)
     with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=COLUMNS)
+        writer = csv.DictWriter(handle, fieldnames=COLUMNS + OPTIONAL_COLUMNS)
         writer.writeheader()
         for index, member_number in enumerate(numbers, start=1):
             first = generator.choice(FIRST_NAMES)
@@ -89,5 +90,20 @@ def generate_sample_members(path: Path, count: int, seed: int = 2026) -> None:
                     "email": f"{first.lower()}.{last.lower()}.{index}@example.com",
                     "phone": f"604-555-{generator.randint(100, 199):04d}",
                     "date_of_birth": birthday.isoformat(),
+                    "address_line_1": f"{generator.randint(1, 9999)} {generator.choice(LAST_NAMES)} Road",
+                    "address_line_2": "",
+                    "city": generator.choice(
+                        ("Squamish", "Whistler", "Vancouver", "North Vancouver")
+                    ),
+                    "province": "BC",
+                    "postal_code": f"V8B {generator.randint(0, 9)}A{generator.randint(0, 9)}",
+                    "sports": ";".join(
+                        sorted(
+                            {
+                                s.value
+                                for s in generator.sample(list(Sport)[:-1], generator.randint(1, 2))
+                            }
+                        )
+                    ),
                 }
             )

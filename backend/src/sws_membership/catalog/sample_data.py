@@ -26,6 +26,7 @@ ONCE_RULE = (RuleKind.ONE_PER_MEMBER_PER_SEASON, {}, "Already held for this seas
 ADULT_RULE = (RuleKind.AGE_AT_LEAST, {"years": 19}, "For members 19 and over")
 YOUTH_RULE = (RuleKind.AGE_AT_MOST, {"years": 18}, "For members 18 and under")
 WAIVER_RULE = (RuleKind.REQUIRES_CURRENT_WAIVER, {}, "Sign the current waiver first")
+PROFILE_RULE = (RuleKind.PROFILE_COMPLETE, {}, "Complete your profile: photo, address and sports")
 
 
 def member_only_rule(season_year: int) -> tuple:
@@ -79,7 +80,7 @@ def sample_products(year: int) -> list[dict]:
             "sort_order": 10,
             "prices": _prices(year, regular=4000),
             "grants": [_season(year, EntitlementKind.MEMBERSHIP)],
-            "rules": [ADULT_RULE, ONCE_RULE],
+            "rules": [PROFILE_RULE, ADULT_RULE, ONCE_RULE],
         },
         {
             "name": f"Youth SWS Membership {year}",
@@ -87,7 +88,7 @@ def sample_products(year: int) -> list[dict]:
             "sort_order": 20,
             "prices": _prices(year, regular=2000),
             "grants": [_season(year, EntitlementKind.MEMBERSHIP)],
-            "rules": [YOUTH_RULE, ONCE_RULE],
+            "rules": [PROFILE_RULE, YOUTH_RULE, ONCE_RULE],
         },
         {
             "name": f"Adult Season Pass {year}",
@@ -98,7 +99,7 @@ def sample_products(year: int) -> list[dict]:
                 _season(year, EntitlementKind.MEMBERSHIP),
                 _season(year, EntitlementKind.SEASON_ACCESS),
             ],
-            "rules": [ADULT_RULE, ONCE_RULE, WAIVER_RULE],
+            "rules": [PROFILE_RULE, ADULT_RULE, ONCE_RULE, WAIVER_RULE],
         },
         {
             "name": f"Youth Season Pass {year}",
@@ -109,7 +110,7 @@ def sample_products(year: int) -> list[dict]:
                 _season(year, EntitlementKind.MEMBERSHIP),
                 _season(year, EntitlementKind.SEASON_ACCESS),
             ],
-            "rules": [YOUTH_RULE, ONCE_RULE, WAIVER_RULE],
+            "rules": [PROFILE_RULE, YOUTH_RULE, ONCE_RULE, WAIVER_RULE],
         },
         {
             "name": f"Day Pass {year}",
@@ -117,7 +118,7 @@ def sample_products(year: int) -> list[dict]:
             "sort_order": 50,
             "prices": _prices(year, regular=3500),
             "grants": [_season(year, EntitlementKind.DAY_VISITS, visits=1)],
-            "rules": [WAIVER_RULE],
+            "rules": [PROFILE_RULE, WAIVER_RULE],
         },
         {
             "name": f"Member Day Shuttle Pass {year}",
@@ -125,7 +126,7 @@ def sample_products(year: int) -> list[dict]:
             "sort_order": 60,
             "prices": _prices(year, regular=2500, members_only=True),
             "grants": [_season(year, EntitlementKind.SHUTTLE_ACCESS, visits=1)],
-            "rules": [member_only_rule(year), WAIVER_RULE],
+            "rules": [PROFILE_RULE, member_only_rule(year), WAIVER_RULE],
         },
     ]
 

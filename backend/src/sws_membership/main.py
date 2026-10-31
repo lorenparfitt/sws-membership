@@ -6,11 +6,13 @@ from pathlib import Path
 from fastapi import FastAPI
 
 from sws_membership.auth.router import router as auth_router
+from sws_membership.cards.router import router as cards_router
 from sws_membership.catalog.router import router as catalog_router
 from sws_membership.entitlements.router import router as entitlements_router
 from sws_membership.health import router as health_router
 from sws_membership.kiosk.router import router as kiosk_router
 from sws_membership.mail.mailer import ConsoleMailer, Mailer
+from sws_membership.members.router import router as members_router
 from sws_membership.orders.router import router as orders_router
 from sws_membership.payments.fake import FakeProcessor
 from sws_membership.payments.fake_router import router as fake_payments_router
@@ -53,11 +55,13 @@ def create_application(
     application.state.payment_processor = payment_processor or configured_processor()
     application.include_router(health_router)
     application.include_router(auth_router)
+    application.include_router(members_router)
     application.include_router(catalog_router)
     application.include_router(orders_router)
     application.include_router(entitlements_router)
     application.include_router(waivers_router)
     application.include_router(kiosk_router)
+    application.include_router(cards_router)
     if isinstance(application.state.payment_processor, FakeProcessor):
         application.include_router(fake_payments_router)
     return application

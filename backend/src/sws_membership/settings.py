@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     # Where signature images and card PDFs live in development. Production
     # swaps in object storage behind the same seam.
     storage_directory: str = "var/storage"
+    # Printed on the back of every card as a QR code, as today.
+    shuttle_url: str = "https://squamishwindsports.com/shuttle-boat-parking/"
 
     # Which processor charges cards. The fake one needs no network and is
     # approved by posting to the notification endpoint; production is nuvei.

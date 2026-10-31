@@ -19,6 +19,7 @@ class MemberFacts:
     date_of_birth: date | None
     entitlements: tuple[Entitlement, ...] = ()
     has_current_waiver: bool = False
+    profile_complete: bool = True
 
     def active_entitlements(self, day: date) -> list[Entitlement]:
         return [e for e in self.entitlements if e.is_active_on(day)]
@@ -63,6 +64,12 @@ def _requires_current_waiver(
     return facts.has_current_waiver
 
 
+def _profile_complete(
+    rule: EligibilityRule, product: Product, facts: MemberFacts, day: date
+) -> bool:
+    return facts.profile_complete
+
+
 def _age_at_least(rule: EligibilityRule, product: Product, facts: MemberFacts, day: date) -> bool:
     age = facts.age_on(day)
     return age is not None and age >= int(rule.parameters["years"])
@@ -82,6 +89,7 @@ def _one_per_member_per_season(
 CHECKERS: dict[RuleKind, Checker] = {
     RuleKind.REQUIRES_ACTIVE_ENTITLEMENT: _requires_active_entitlement,
     RuleKind.REQUIRES_CURRENT_WAIVER: _requires_current_waiver,
+    RuleKind.PROFILE_COMPLETE: _profile_complete,
     RuleKind.AGE_AT_LEAST: _age_at_least,
     RuleKind.AGE_AT_MOST: _age_at_most,
     RuleKind.ONE_PER_MEMBER_PER_SEASON: _one_per_member_per_season,

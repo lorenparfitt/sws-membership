@@ -89,6 +89,7 @@ class RuleKind(enum.Enum):
 
     REQUIRES_ACTIVE_ENTITLEMENT = "requires_active_entitlement"
     REQUIRES_CURRENT_WAIVER = "requires_current_waiver"
+    PROFILE_COMPLETE = "profile_complete"
     AGE_AT_LEAST = "age_at_least"
     AGE_AT_MOST = "age_at_most"
     ONE_PER_MEMBER_PER_SEASON = "one_per_member_per_season"

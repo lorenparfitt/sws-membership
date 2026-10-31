@@ -114,3 +114,26 @@ def sign_current_waiver(session, member) -> None:
         )
     )
     session.flush()
+
+
+def complete_profile(session, member) -> None:
+    """Fill the fields the profile rule requires, with a fake photo key."""
+    from datetime import date
+
+    from sws_membership.members.models import MemberSport, Sport
+
+    member.photo_key = member.photo_key or "test/photo.jpg"
+    member.date_of_birth = member.date_of_birth or date(1990, 1, 1)
+    member.address_line_1 = member.address_line_1 or "1 Spit Road"
+    member.city = member.city or "Squamish"
+    member.province = member.province or "BC"
+    member.postal_code = member.postal_code or "V8B 0A1"
+    if not member.sports:
+        member.sports.append(MemberSport(sport=Sport.KITE_TWIN_TIP))
+    session.flush()
+
+
+def make_eligible(session, member) -> None:
+    """A member who clears every non-product rule: complete profile and current waiver."""
+    complete_profile(session, member)
+    sign_current_waiver(session, member)

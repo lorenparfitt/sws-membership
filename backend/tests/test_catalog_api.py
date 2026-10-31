@@ -10,7 +10,7 @@ from sws_membership.catalog.sample_data import load_sample_catalog
 from sws_membership.entitlements.models import Entitlement, EntitlementKind
 from sws_membership.members.member_numbers import allocate_member_number
 from sws_membership.members.models import Member
-from tests.conftest import sign_current_waiver
+from tests.conftest import make_eligible
 
 YEAR = 2026
 TODAY = date(YEAR, 6, 15)
@@ -26,7 +26,7 @@ def _signed_in(session, client, birth: date) -> Member:
     )
     session.add(member)
     session.flush()
-    sign_current_waiver(session, member)
+    make_eligible(session, member)
     client.cookies.set(SESSION_COOKIE, service.open_session(session, member))
     client.app.dependency_overrides[current_day] = lambda: TODAY
     return member
@@ -47,7 +47,10 @@ def test_sample_catalog_loads_once_and_resyncs_rules(session):
     session.flush()
     assert load_sample_catalog(session, YEAR) == 0
     session.refresh(day_pass)
-    assert [rule.kind.value for rule in day_pass.rules] == ["requires_current_waiver"]
+    assert [rule.kind.value for rule in day_pass.rules] == [
+        "profile_complete",
+        "requires_current_waiver",
+    ]
 
 
 def test_adult_without_membership_sees_the_gates(session, client):

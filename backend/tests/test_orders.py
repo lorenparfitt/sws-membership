@@ -15,7 +15,7 @@ from sws_membership.orders import service
 from sws_membership.orders.models import Order, OrderStatus, PaymentMethod
 from sws_membership.payments.fake import FakeProcessor
 from sws_membership.payments.processor import PaymentNotification
-from tests.conftest import sign_current_waiver
+from tests.conftest import make_eligible
 
 YEAR = 2026
 TODAY = date(YEAR, 6, 15)
@@ -32,7 +32,7 @@ def _member(session, email, birth=date(1990, 1, 1), roles=()) -> Member:
     )
     session.add(member)
     session.flush()
-    sign_current_waiver(session, member)
+    make_eligible(session, member)
     return member
 
 

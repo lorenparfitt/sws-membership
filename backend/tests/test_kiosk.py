@@ -12,7 +12,7 @@ from sws_membership.kiosk import service
 from sws_membership.kiosk.models import Station
 from sws_membership.members.member_numbers import allocate_member_number
 from sws_membership.members.models import Member, MemberRole, MemberRoleAssignment
-from tests.conftest import sign_current_waiver
+from tests.conftest import make_eligible, sign_current_waiver
 
 YEAR = 2026
 TODAY = date(YEAR, 6, 15)
@@ -33,7 +33,11 @@ def _member(
     session.add(member)
     session.flush()
     if waiver:
-        sign_current_waiver(session, member)
+        make_eligible(session, member)
+    else:
+        from tests.conftest import complete_profile
+
+        complete_profile(session, member)
     return member
 
 

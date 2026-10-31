@@ -17,6 +17,7 @@ from sws_membership.members.models import Member, MemberRole, MemberRoleAssignme
 from sws_membership.storage.objects import LocalDirectoryStorage
 from sws_membership.waivers import service
 from sws_membership.waivers.models import WaiverSignature
+from tests.conftest import complete_profile
 
 YEAR = 2026
 TODAY = date(YEAR, 6, 15)
@@ -200,6 +201,7 @@ def test_waiver_gates_the_day_pass_until_signed(session, client, storage, templa
     client.app.state.storage = storage
     load_sample_catalog(session, YEAR)
     member = _member(session)
+    complete_profile(session, member)
     _sign_in(session, client, member)
 
     before = client.get("/api/waiver").json()
@@ -247,7 +249,9 @@ def test_only_admins_publish_or_reset(session, client, template):
 
 def test_membership_alone_does_not_need_the_waiver(session, client, template):
     load_sample_catalog(session, YEAR)
-    _sign_in(session, client, _member(session))
+    member = _member(session)
+    complete_profile(session, member)
+    _sign_in(session, client, member)
     products = {p["name"]: p for p in client.get("/api/catalog").json()}
     assert products[f"Adult SWS Membership {YEAR}"]["purchasable"] is True
     assert products[f"Adult Season Pass {YEAR}"]["locked_because"] == [

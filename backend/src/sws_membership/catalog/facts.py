@@ -19,4 +19,5 @@ def facts_for(session: Session, member: Member) -> MemberFacts:
         date_of_birth=member.date_of_birth,
         entitlements=tuple(entitlements),
         has_current_waiver=has_current_waiver(session, member),
+        profile_complete=member.profile_complete,
     )

@@ -5,6 +5,7 @@ a new model module is registered here and nowhere else.
 """
 
 from sws_membership.auth import models as auth_models  # noqa: F401
+from sws_membership.cards import models as card_models  # noqa: F401
 from sws_membership.catalog import models as catalog_models  # noqa: F401
 from sws_membership.database import Base
 from sws_membership.entitlements import models as entitlement_models  # noqa: F401
