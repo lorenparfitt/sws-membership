@@ -7,10 +7,11 @@ recording path as a real notification; nothing is short-circuited.
 
 from fastapi import APIRouter, HTTPException, Request, status
 
-from sws_membership.auth.dependencies import CurrentMember, DatabaseSession
-from sws_membership.members.models import MemberRole
+from sws_membership.auth.dependencies import CurrentMember, DatabaseSession, MailerDependency
+from sws_membership.members.models import Member, MemberRole
 from sws_membership.orders import service
 from sws_membership.orders.models import Order
+from sws_membership.orders.receipts import send_receipt
 from sws_membership.payments.fake import FakeProcessor
 
 router = APIRouter(prefix="/api/payments/fake", tags=["payments-fake"])
@@ -18,7 +19,11 @@ router = APIRouter(prefix="/api/payments/fake", tags=["payments-fake"])
 
 @router.post("/approve/{order_id}")
 def approve(
-    order_id: int, request: Request, session: DatabaseSession, member: CurrentMember
+    order_id: int,
+    request: Request,
+    session: DatabaseSession,
+    member: CurrentMember,
+    mailer: MailerDependency,
 ) -> dict:
     processor: FakeProcessor = request.app.state.payment_processor
     order = session.get(Order, order_id)
@@ -35,5 +40,7 @@ def approve(
     }
     form["checksum"] = processor.checksum(form["order_id"], transaction_id, "APPROVED")
     notification = processor.verify_notification(form)
-    service.record_payment(session, processor.name, notification)
+    _, paid_now = service.record_payment(session, processor.name, notification)
+    if paid_now:
+        send_receipt(mailer, order, session.get(Member, order.member_id))
     return {"status": order.status.value}

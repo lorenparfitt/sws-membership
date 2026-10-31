@@ -103,11 +103,13 @@ def mark_paid(session: Session, order: Order, now: datetime | None = None) -> No
 
 def record_payment(
     session: Session, processor_name: str, notification: PaymentNotification
-) -> Payment:
+) -> tuple[Payment, bool]:
     """Store a verified notification; the first approved one pays the order.
 
-    A notification seen before (same processor and transaction) is returned
-    unchanged, so a processor that retries delivery changes nothing.
+    Returns the payment and whether this call moved the order to paid. A
+    notification seen before (same processor and transaction) is returned
+    unchanged with False, so a processor that retries delivery changes
+    nothing and triggers nothing.
     """
     existing = session.scalars(
         select(Payment).where(
@@ -116,7 +118,7 @@ def record_payment(
         )
     ).first()
     if existing is not None:
-        return existing
+        return existing, False
     order = session.get(Order, notification.order_id)
     if order is None:
         raise LookupError(f"no order {notification.order_id}")
@@ -129,7 +131,13 @@ def record_payment(
         raw_notification=notification.raw,
     )
     session.add(payment)
-    if notification.approved and notification.amount_cents == order.total_cents:
+    paid_now = False
+    if (
+        notification.approved
+        and notification.amount_cents == order.total_cents
+        and order.status is not OrderStatus.PAID
+    ):
         mark_paid(session, order)
+        paid_now = True
     session.flush()
-    return payment
+    return payment, paid_now

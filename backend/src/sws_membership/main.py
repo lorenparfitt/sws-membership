@@ -12,6 +12,7 @@ from sws_membership.catalog.router import router as catalog_router
 from sws_membership.entitlements.router import router as entitlements_router
 from sws_membership.health import router as health_router
 from sws_membership.kiosk.router import router as kiosk_router
+from sws_membership.mail.mailchimp import MailchimpTransactionalMailer
 from sws_membership.mail.mailer import ConsoleMailer, Mailer
 from sws_membership.members.router import router as members_router
 from sws_membership.members.staff_router import router as staff_members_router
@@ -34,6 +35,16 @@ def configure_logging() -> None:
     logging.basicConfig(level=settings.log_level, format="%(levelname)s %(name)s: %(message)s")
 
 
+def configured_mailer() -> Mailer:
+    if settings.mail_backend == "mailchimp":
+        return MailchimpTransactionalMailer(
+            api_key=settings.mailchimp_transactional_api_key,
+            from_email=settings.mail_from_email,
+            from_name=settings.mail_from_name,
+        )
+    return ConsoleMailer()
+
+
 def configured_processor() -> PaymentProcessor:
     if settings.payment_processor == "nuvei":
         return NuveiProcessor(
@@ -52,7 +63,7 @@ def create_application(
     storage: ObjectStorage | None = None,
 ) -> FastAPI:
     application = FastAPI(title="SWS Membership")
-    application.state.mailer = mailer or ConsoleMailer()
+    application.state.mailer = mailer or configured_mailer()
     application.state.storage = storage or LocalDirectoryStorage(Path(settings.storage_directory))
     application.state.payment_processor = payment_processor or configured_processor()
     application.include_router(health_router)

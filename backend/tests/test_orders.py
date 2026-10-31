@@ -106,9 +106,9 @@ def test_an_approved_notification_pays_the_order_once(session, catalog):
     order = service.place_order(
         session, member, [_product(session, "Day Pass").id], PaymentMethod.CARD, TODAY
     )
-    first = service.record_payment(session, "fake", _notification(order))
-    again = service.record_payment(session, "fake", _notification(order))
-    assert first is again
+    first, paid_now = service.record_payment(session, "fake", _notification(order))
+    again, paid_again = service.record_payment(session, "fake", _notification(order))
+    assert first is again and paid_now is True and paid_again is False
     assert order.status is OrderStatus.PAID
     assert len(_entitlements(session, member)) == 1
 

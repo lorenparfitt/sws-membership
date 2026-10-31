@@ -1,8 +1,8 @@
 """The one way the application sends email.
 
 Development prints messages to the log so a sign-in link can be copied from
-the console. Production swaps in a Mailgun implementation of the same
-protocol at wiring time.
+the console. Production swaps in the Mailchimp Transactional implementation of the
+same protocol at wiring time.
 """
 
 import logging

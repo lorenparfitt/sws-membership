@@ -5,11 +5,17 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
-from sws_membership.auth.dependencies import CurrentMember, DatabaseSession, require_role
+from sws_membership.auth.dependencies import (
+    CurrentMember,
+    DatabaseSession,
+    MailerDependency,
+    require_role,
+)
 from sws_membership.catalog.router import CurrentDay
 from sws_membership.members.models import Member, MemberRole
 from sws_membership.orders import service
 from sws_membership.orders.models import Order, OrderStatus, PaymentMethod
+from sws_membership.orders.receipts import send_receipt
 from sws_membership.payments.processor import NotificationRejected, PaymentProcessor
 
 router = APIRouter(prefix="/api", tags=["orders"])
@@ -105,6 +111,7 @@ def staff_order(
     today: CurrentDay,
     staff: StaffMember,
     processor: Processor,
+    mailer: MailerDependency,
 ) -> OrderView:
     """Ring up any member. Cash and free pay at once; card opens the processor form.
 
@@ -123,6 +130,8 @@ def staff_order(
     checkout = None
     if body.payment_method is PaymentMethod.CARD:
         checkout = processor.open_checkout(order.id, order.total_cents, order.currency)
+    elif order.status is OrderStatus.PAID:
+        send_receipt(mailer, order, member)
     return OrderView.of(order, checkout)
 
 
@@ -136,13 +145,15 @@ def staff_order_status(order_id: int, session: DatabaseSession, staff: StaffMemb
 
 @router.post("/payments/notification", include_in_schema=False)
 async def payment_notification(
-    request: Request, session: DatabaseSession, processor: Processor
+    request: Request, session: DatabaseSession, processor: Processor, mailer: MailerDependency
 ) -> str:
     """The processor's webhook. Form encoded; answers OK once stored."""
     form = {key: str(value) for key, value in (await request.form()).items()}
     try:
         notification = processor.verify_notification(form)
-        service.record_payment(session, processor.name, notification)
+        payment, paid_now = service.record_payment(session, processor.name, notification)
+        if paid_now:
+            send_receipt(mailer, payment.order, session.get(Member, payment.order.member_id))
     except NotificationRejected as why:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(why))
     except LookupError as why:

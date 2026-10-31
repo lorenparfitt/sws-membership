@@ -22,6 +22,13 @@ class Settings(BaseSettings):
     # Printed on the back of every card as a QR code, as today.
     shuttle_url: str = "https://squamishwindsports.com/shuttle-boat-parking/"
 
+    # Which mailer sends. console logs each message; mailchimp delivers it
+    # through Mailchimp Transactional, the account the newsletters use.
+    mail_backend: Literal["console", "mailchimp"] = "console"
+    mailchimp_transactional_api_key: str = ""
+    mail_from_email: str = "membership@squamishwindsports.com"
+    mail_from_name: str = "Squamish Windsports Society"
+
     # Which processor charges cards. The fake one needs no network and is
     # approved by posting to the notification endpoint; production is nuvei.
     payment_processor: Literal["fake", "nuvei"] = "fake"
