@@ -60,6 +60,11 @@ def task_lint():
     }
 
 
+def task_api_doc():
+    """Regenerate docs/api.md from the API routes."""
+    return {"actions": [f"{MANAGE} write_api_doc"]}
+
+
 def task_check():
     """Lint and test, the gate CI runs."""
     return {"actions": None, "task_dep": ["lint", "test"]}

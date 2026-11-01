@@ -21,6 +21,7 @@ router = Router(tags=["payments-fake"])
 
 @router.post("/approve/{order_id}", auth=member_auth)
 def approve(request, order_id: int) -> dict:
+    """Development only: approve a card order as the fake processor would."""
     processor = wiring.processor
     if not isinstance(processor, FakeProcessor):
         raise HttpError(404, "not available with this payment processor")

@@ -79,4 +79,7 @@ def catalog_for(member, today: date, basket: tuple[int, ...] = ()) -> list[Produ
 
 @router.get("", auth=member_auth, response=list[ProductView])
 def catalog(request, basket: list[int] = Query(default=[])):  # noqa: B008
+    """Products on sale to the signed-in member today, with prices and why any is locked;
+    basket ids count as held.
+    """
     return catalog_for(request.auth, clock.today(), tuple(basket))

@@ -123,6 +123,9 @@ def _rejected(problem: Exception) -> HttpError:
 
 @router.get("/catalog/options")
 def catalog_options(request) -> dict:
+    """The closed lists the catalog editor offers: entitlement kinds, and rule kinds with their
+    parameters.
+    """
     return {
         "entitlement_kinds": [k.value for k in EntitlementKind],
         "rule_kinds": [
@@ -133,11 +136,13 @@ def catalog_options(request) -> dict:
 
 @router.get("/catalog/products", response=list[AdminProductView])
 def list_products(request, season_year: int | None = None):
+    """Every product with its prices, grants and rules, optionally for one season."""
     return [AdminProductView.of(p) for p in catalog.all_products(season_year)]
 
 
 @router.post("/catalog/products", response={201: AdminProductView})
 def create_product(request, body: ProductBody):
+    """Create a product."""
     try:
         return Status(201, _fresh(catalog.create_product(catalog.ProductInput(**body.dict()))))
     except catalog.CatalogRejected as why:
@@ -146,6 +151,7 @@ def create_product(request, body: ProductBody):
 
 @router.put("/catalog/products/{product_id}", response=AdminProductView)
 def update_product(request, product_id: int, body: ProductBody):
+    """Change a product's name, description, season, sort order or active flag."""
     try:
         return _fresh(
             catalog.update_product(_product(product_id), catalog.ProductInput(**body.dict()))
@@ -156,6 +162,7 @@ def update_product(request, product_id: int, body: ProductBody):
 
 @router.post("/catalog/products/{product_id}/prices", response={201: AdminProductView})
 def add_price(request, product_id: int, body: PriceBody):
+    """Add a price window to a product."""
     product = _product(product_id)
     try:
         catalog.add_price(product, catalog.PriceInput(**body.dict()))
@@ -166,6 +173,7 @@ def add_price(request, product_id: int, body: PriceBody):
 
 @router.delete("/catalog/products/{product_id}/prices/{price_id}", response=AdminProductView)
 def remove_price(request, product_id: int, price_id: int):
+    """Remove a price that no order has used."""
     product = _product(product_id)
     try:
         catalog.remove_price(product, price_id)
@@ -178,6 +186,7 @@ def remove_price(request, product_id: int, price_id: int):
 
 @router.post("/catalog/products/{product_id}/grants", response={201: AdminProductView})
 def add_grant(request, product_id: int, body: GrantBody):
+    """Add an entitlement the product confers."""
     product = _product(product_id)
     try:
         catalog.add_grant(product, catalog.GrantInput(**body.dict()))
@@ -188,6 +197,7 @@ def add_grant(request, product_id: int, body: GrantBody):
 
 @router.delete("/catalog/products/{product_id}/grants/{grant_id}", response=AdminProductView)
 def remove_grant(request, product_id: int, grant_id: int):
+    """Remove a grant."""
     product = _product(product_id)
     try:
         catalog.remove_grant(product, grant_id)
@@ -198,6 +208,7 @@ def remove_grant(request, product_id: int, grant_id: int):
 
 @router.post("/catalog/products/{product_id}/rules", response={201: AdminProductView})
 def add_rule(request, product_id: int, body: RuleBody):
+    """Add an eligibility rule to a product."""
     product = _product(product_id)
     try:
         catalog.add_rule(product, body.kind, body.parameters, body.failure_message)
@@ -208,6 +219,7 @@ def add_rule(request, product_id: int, body: RuleBody):
 
 @router.delete("/catalog/products/{product_id}/rules/{rule_id}", response=AdminProductView)
 def remove_rule(request, product_id: int, rule_id: int):
+    """Remove a rule."""
     product = _product(product_id)
     try:
         catalog.remove_rule(product, rule_id)
@@ -218,6 +230,7 @@ def remove_rule(request, product_id: int, rule_id: int):
 
 @router.post("/catalog/rollover", response={201: list[AdminProductView]})
 def rollover(request, body: RolloverBody):
+    """Copy one season's catalog to the next."""
     try:
         copies = catalog.rollover_season(body.from_year, body.to_year)
         return Status(201, [AdminProductView.of(p) for p in copies])
@@ -254,6 +267,7 @@ class ReportOutput(Schema):
 
 @router.get("/reports", response=list[ReportView])
 def list_reports(request):
+    """The reports that exist and the parameters each takes."""
     return [
         ReportView(
             name=r.name,
@@ -277,12 +291,14 @@ def _run(name: str, parameters: dict[str, Any]):
 
 @router.post("/reports/{name}/run", response=ReportOutput)
 def run_report(request, name: str, body: ReportRun):
+    """Run a report and return its table."""
     report, result = _run(name, body.parameters)
     return ReportOutput(title=report.title, columns=result.columns, rows=result.rows)
 
 
 @router.post("/reports/{name}/csv")
 def report_csv(request, name: str, body: ReportRun):
+    """Run a report and return it as CSV."""
     _, result = _run(name, body.parameters)
     buffer = StringIO()
     writer = csv.writer(buffer)
@@ -316,6 +332,7 @@ class WaiverHistory(Schema):
 
 @router.get("/waiver/history", response=WaiverHistory)
 def waiver_history(request):
+    """Every published waiver version and every reset."""
     return WaiverHistory(
         templates=[TemplateView.from_orm(t) for t in WaiverTemplate.objects.order_by("-version")],
         resets=[ResetView.from_orm(r) for r in WaiverReset.objects.order_by("-reset_at")[:20]],

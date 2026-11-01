@@ -64,11 +64,13 @@ def client_address(request) -> str:
 
 @router.get("/waiver", auth=member_auth, response=WaiverView)
 def waiver(request):
+    """The current waiver text and whether the signed-in member has signed it."""
     return waiver_view(request.auth)
 
 
 @router.post("/waiver/sign", auth=member_auth, response={201: WaiverView})
 def sign(request, body: SignatureBody):
+    """Sign the current waiver with a drawn signature, plus a guardian's for a minor."""
     try:
         service.sign(
             wiring.storage,
@@ -89,6 +91,7 @@ def sign(request, body: SignatureBody):
 
 @router.post("/admin/waiver/publish", auth=admin_auth, response={201: dict})
 def publish(request, body: PublishBody):
+    """Publish a new waiver version; everyone must sign again."""
     if not body.title.strip() or not body.body_text.strip():
         raise HttpError(400, "title and text are required")
     template = service.publish_template(body.title, body.body_text, by=request.auth)
@@ -97,6 +100,7 @@ def publish(request, body: PublishBody):
 
 @router.post("/admin/waiver/reset", auth=admin_auth, response={201: dict})
 def reset(request, body: ResetBody):
+    """Force everyone to sign the current waiver again."""
     if not body.reason.strip():
         raise HttpError(400, "a reason is required")
     reset_row = service.reset_signatures(request.auth, body.reason)

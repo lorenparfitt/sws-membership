@@ -71,16 +71,19 @@ def load_member(member_id: int) -> Member:
 
 @router.get("/sports", auth=None)
 def sports(request) -> list[dict[str, str]]:
+    """The closed list of sports a member can practise."""
     return [{"value": sport.value, "label": SPORT_LABELS[sport]} for sport in Sport]
 
 
 @router.get("/me/profile", auth=member_auth, response=ProfileView)
 def my_profile(request):
+    """The signed-in member's profile and what it is still missing."""
     return ProfileView.of(request.auth)
 
 
 @router.put("/me/profile", auth=member_auth, response=ProfileView)
 def update_my_profile(request, body: ProfileBody):
+    """Update the signed-in member's contact details, address and sports."""
     try:
         profile.update_profile(
             request.auth,
@@ -115,19 +118,23 @@ def _photo_response(member: Member) -> HttpResponse:
 
 @router.post("/me/photo", auth=member_auth, response=ProfileView)
 def upload_my_photo(request, photo: File[UploadedFile]):
+    """Upload the signed-in member's face photo for the card."""
     return _store(request.auth, _read_upload(photo))
 
 
 @router.get("/me/photo", auth=member_auth)
 def my_photo(request):
+    """The signed-in member's stored photo."""
     return _photo_response(request.auth)
 
 
 @router.get("/staff/members/{member_id}/photo", auth=staff_auth)
 def member_photo(request, member_id: int):
+    """A member's stored photo, for the kiosk."""
     return _photo_response(load_member(member_id))
 
 
 @router.post("/staff/members/{member_id}/photo", auth=staff_auth, response=ProfileView)
 def upload_member_photo(request, member_id: int, photo: File[UploadedFile]):
+    """Take or replace a member's photo at the counter."""
     return _store(load_member(member_id), _read_upload(photo))

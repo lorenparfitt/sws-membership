@@ -39,5 +39,6 @@ def entitlements_of(member):
 
 @router.get("", auth=member_auth, response=list[EntitlementView])
 def my_entitlements(request):
+    """The passes the signed-in member holds."""
     today = clock.today()
     return [EntitlementView.of(row, today) for row in entitlements_of(request.auth)]

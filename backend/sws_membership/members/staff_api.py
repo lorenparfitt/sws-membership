@@ -75,6 +75,7 @@ def detail(member: Member, today: date) -> MemberDetail:
 
 @router.get("/{member_id}", auth=staff_auth, response=MemberDetail)
 def member_detail(request, member_id: int):
+    """Everything the counter needs about one member: profile, passes, orders, what they can buy."""
     return detail(load_member(member_id), clock.today())
 
 
@@ -105,6 +106,7 @@ def staff_update_profile(request, member_id: int, body: StaffProfileBody):
 
 @router.put("/{member_id}/roles", auth=admin_auth, response=MemberDetail)
 def set_roles(request, member_id: int, body: RolesBody):
+    """Set a member's roles (staff, admin)."""
     member = load_member(member_id)
     wanted = set(body.roles)
     for role in MemberRole:

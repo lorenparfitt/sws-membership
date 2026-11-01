@@ -22,6 +22,7 @@ def _pdf(data: bytes, filename: str) -> HttpResponse:
 
 @router.get("/me/card.pdf", auth=member_auth)
 def my_card(request):
+    """The signed-in member's card as a PDF."""
     member = request.auth
     data = service.render_for_members(
         wiring.storage, [member], clock.today(), settings.SWS_SHUTTLE_URL

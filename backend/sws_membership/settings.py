@@ -69,6 +69,8 @@ INSTALLED_APPS = [
     "sws_membership.kiosk",
     "sws_membership.cards",
     "sws_membership.orders",
+    # The project itself, for commands that belong to no one app.
+    "sws_membership",
 ]
 
 MIDDLEWARE = [

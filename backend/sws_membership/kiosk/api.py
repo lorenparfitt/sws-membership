@@ -99,12 +99,14 @@ def member_view(view: service.GateView, today: date) -> MemberGateView:
 
 @router.get("/lookup", auth=staff_auth, response=list[MemberGateView])
 def lookup(request, q: str):
+    """Find members by scanned number, email or name, with passes and waiver status."""
     today = clock.today()
     return [member_view(service.gate_view(m, today), today) for m in service.search_members(q)]
 
 
 @router.post("/check-in", auth=staff_auth, response=CheckInResult)
 def check_in(request, body: CheckInBody):
+    """Admit a member at a station on their best pass; one admission per station per day."""
     today = clock.today()
     member = load_member(body.member_id)
     try:
@@ -127,6 +129,7 @@ def check_in(request, body: CheckInBody):
 
 @router.get("/today", auth=staff_auth)
 def today_counts(request) -> dict[str, int]:
+    """Check-ins so far today, per station."""
     return service.counts_for(clock.today())
 
 

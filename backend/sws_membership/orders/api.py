@@ -179,11 +179,13 @@ def _cancel(order: Order) -> OrderView:
 
 @router.post("/orders/quote", auth=member_auth, response=QuoteView)
 def quote_basket(request, body: NewOrder):
+    """Price a basket as a whole, before any order exists."""
     return QuoteView.of(service.quote(request.auth, body.product_ids, clock.today()))
 
 
 @router.post("/orders", auth=member_auth, response={201: OrderView})
 def place_order(request, body: NewOrder):
+    """Place a card order for the basket and open the processor's checkout."""
     order = service.place_order(request.auth, body.product_ids, PaymentMethod.CARD, clock.today())
     checkout = wiring.processor.open_checkout(order.id, order.total_cents, order.currency)
     return Status(201, OrderView.of(order, checkout))
@@ -191,26 +193,31 @@ def place_order(request, body: NewOrder):
 
 @router.get("/orders", auth=member_auth, response=list[OrderView])
 def my_orders(request):
+    """The signed-in member's orders, newest first."""
     return [OrderView.of(order) for order in _orders_of(request.auth.id)]
 
 
 @router.get("/orders/{order_id}", auth=member_auth, response=OrderView)
 def order_status(request, order_id: int):
+    """One of the signed-in member's orders."""
     return OrderView.of(_own_order(request.auth, order_id))
 
 
 @router.get("/orders/{order_id}/receipt", auth=member_auth)
 def my_receipt(request, order_id: int):
+    """The plain-text receipt of a paid order."""
     return _receipt(_own_order(request.auth, order_id))
 
 
 @router.post("/orders/{order_id}/checkout", auth=member_auth, response=OrderView)
 def reopen_checkout(request, order_id: int):
+    """A fresh processor session for an unpaid card order."""
     return _reopen(_own_order(request.auth, order_id))
 
 
 @router.post("/orders/{order_id}/cancel", auth=member_auth, response=OrderView)
 def cancel_order(request, order_id: int):
+    """Withdraw an unpaid card order."""
     return _cancel(_own_order(request.auth, order_id))
 
 
@@ -219,6 +226,7 @@ def cancel_order(request, order_id: int):
 
 @router.post("/staff/orders/quote", auth=staff_auth, response=QuoteView)
 def staff_quote_basket(request, body: StaffQuote):
+    """Price a basket for any member at the till."""
     member = load_member(body.member_id)
     return QuoteView.of(service.quote(member, body.product_ids, clock.today()))
 
@@ -244,21 +252,25 @@ def staff_order(request, body: StaffOrder):
 
 @router.get("/staff/orders/{order_id}", auth=staff_auth, response=OrderView)
 def staff_order_status(request, order_id: int):
+    """Any member's order."""
     return OrderView.of(_any_order(order_id))
 
 
 @router.get("/staff/orders/{order_id}/receipt", auth=staff_auth)
 def staff_receipt(request, order_id: int):
+    """The plain-text receipt of any paid order."""
     return _receipt(_any_order(order_id))
 
 
 @router.post("/staff/orders/{order_id}/checkout", auth=staff_auth, response=OrderView)
 def staff_reopen_checkout(request, order_id: int):
+    """A fresh processor session for any unpaid card order."""
     return _reopen(_any_order(order_id))
 
 
 @router.post("/staff/orders/{order_id}/cancel", auth=staff_auth, response=OrderView)
 def staff_cancel_order(request, order_id: int):
+    """Withdraw any unpaid card order."""
     return _cancel(_any_order(order_id))
 
 
