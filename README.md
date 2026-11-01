@@ -11,6 +11,7 @@ cards.
 - `frontend/` React application built with Vite.
 - `docker-compose.yml` local Postgres.
 - `dodo.py` every top-level action. Developers and CI run the same tasks.
+- `docs/dependencies.md` what the platform is built on and why each piece is there.
 
 ## Running locally
 
