@@ -64,7 +64,8 @@ class GateView:
 
 def gate_view(member: Member, today: date) -> GateView:
     entitlements = list(
-        member.entitlements.select_related("product")
+        member.entitlements.held()
+        .select_related("product")
         .prefetch_related("product__rules")
         .order_by("-valid_to", "id")
     )

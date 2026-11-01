@@ -79,3 +79,29 @@ class Payment(models.Model):
         return (
             f"{self.processor} {self.transaction_id} {'approved' if self.approved else 'declined'}"
         )
+
+
+class Refund(models.Model):
+    """Money given back for a whole order, and who gave it."""
+
+    order = models.ForeignKey(Order, on_delete=models.PROTECT, related_name="refunds")
+    # The approved card payment this reverses; null for cash and free orders.
+    payment = models.ForeignKey(
+        Payment, null=True, blank=True, on_delete=models.PROTECT, related_name="refunds"
+    )
+    amount_cents = models.IntegerField()
+    # Empty for cash handed back at the counter.
+    processor = models.CharField(max_length=20, blank=True)
+    transaction_id = models.CharField(max_length=64, blank=True)
+    raw_response = models.JSONField(default=dict, blank=True)
+    reason = models.TextField()
+    refunded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+    refunded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "refunds"
+
+    def __str__(self) -> str:
+        return f"refund of order {self.order_id}: {self.amount_cents}"

@@ -55,7 +55,7 @@ def _day(params: dict[str, Any], name: str, default: date) -> date:
 
 
 def _active(on: date):
-    return Q(valid_from__lte=on, valid_to__gte=on)
+    return Q(valid_from__lte=on, valid_to__gte=on, revoked_at__isnull=True)
 
 
 def sales_by_product(params: dict[str, Any]) -> ReportResult:
@@ -125,7 +125,11 @@ def waiver_status(params: dict[str, Any]) -> ReportResult:
     on = _day(params, "on", date.today())
     latest = WaiverTemplate.objects.order_by("-version").first()
     holders = (
-        Member.objects.filter(entitlements__valid_from__lte=on, entitlements__valid_to__gte=on)
+        Member.objects.filter(
+            entitlements__valid_from__lte=on,
+            entitlements__valid_to__gte=on,
+            entitlements__revoked_at__isnull=True,
+        )
         .distinct()
         .order_by("last_name", "first_name")
     )
@@ -153,6 +157,7 @@ def cards_to_print(params: dict[str, Any]) -> ReportResult:
             entitlements__kind=EntitlementKind.MEMBERSHIP,
             entitlements__valid_from__lte=on,
             entitlements__valid_to__gte=on,
+            entitlements__revoked_at__isnull=True,
         )
         .exclude(id__in=printed)
         .distinct()

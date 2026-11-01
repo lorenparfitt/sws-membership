@@ -16,24 +16,10 @@ from sws_membership.members.api import ProfileView, load_member
 from sws_membership.members.lookup import find_member_by_email
 from sws_membership.members.models import Member, MemberRole, Sport, normalise_email
 from sws_membership.members.roles import grant_role, revoke_role
+from sws_membership.orders.api import ORDER_PREFETCH, OrderView
 from sws_membership.waivers.service import current_signature
 
 router = Router(tags=["staff-members"])
-
-
-class OrderLineView(Schema):
-    product_name: str
-    amount_cents: int
-
-
-class OrderView(Schema):
-    id: int
-    status: str
-    payment_method: str
-    total_cents: int
-    created_at: datetime
-    paid_at: datetime | None
-    lines: list[OrderLineView]
 
 
 class MemberDetail(Schema):
@@ -71,7 +57,7 @@ class RolesBody(Schema):
 def detail(member: Member, today: date) -> MemberDetail:
     gate = kiosk.gate_view(member, today)
     signature = current_signature(member)
-    orders = member.orders.prefetch_related("lines")[:50]
+    orders = member.orders.prefetch_related(*ORDER_PREFETCH)[:50]
     return MemberDetail(
         id=member.id,
         member_number=member.member_number,
@@ -82,21 +68,7 @@ def detail(member: Member, today: date) -> MemberDetail:
         waiver_signed_at=signature.signed_at if signature else None,
         passes=passes_of(gate, today),
         today=check_ins_of(gate),
-        orders=[
-            OrderView(
-                id=o.id,
-                status=o.status,
-                payment_method=o.payment_method,
-                total_cents=o.total_cents,
-                created_at=o.created_at,
-                paid_at=o.paid_at,
-                lines=[
-                    OrderLineView(product_name=l.product_name, amount_cents=l.amount_cents)
-                    for l in o.lines.all()
-                ],
-            )
-            for o in orders
-        ],
+        orders=[OrderView.of(o) for o in orders],
         catalog=catalog_for(member, today),
     )
 

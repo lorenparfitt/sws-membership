@@ -34,7 +34,7 @@ class EntitlementView(Schema):
 
 
 def entitlements_of(member):
-    return member.entitlements.select_related("product").order_by("-valid_to", "id")
+    return member.entitlements.held().select_related("product").order_by("-valid_to", "id")
 
 
 @router.get("", auth=member_auth, response=list[EntitlementView])

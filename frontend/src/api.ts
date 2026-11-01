@@ -80,6 +80,13 @@ export interface Quote {
   currency: string;
 }
 
+export interface Refund {
+  amount_cents: number;
+  reason: string;
+  refunded_at: string;
+  refunded_by: string;
+}
+
 export interface Order {
   id: number;
   status: string;
@@ -89,6 +96,7 @@ export interface Order {
   created_at: string;
   paid_at: string | null;
   lines: { product_name: string; amount_cents: number }[];
+  refund: Refund | null;
   checkout: Checkout | null;
 }
 
@@ -190,16 +198,6 @@ async function upload<T>(path: string, file: File): Promise<T> {
   return body as T;
 }
 
-export interface StaffOrder {
-  id: number;
-  status: string;
-  payment_method: string;
-  total_cents: number;
-  created_at: string;
-  paid_at: string | null;
-  lines: { product_name: string; amount_cents: number }[];
-}
-
 export interface MemberDetail {
   id: number;
   member_number: number;
@@ -210,7 +208,7 @@ export interface MemberDetail {
   waiver_signed_at: string | null;
   passes: Entitlement[];
   today: { station: string; checked_in_at: string; product_name: string }[];
-  orders: StaffOrder[];
+  orders: Order[];
   catalog: Product[];
 }
 
@@ -300,6 +298,7 @@ export const admin = {
     if (!response.ok) throw new ApiError(response.status, await response.text());
     return response.blob();
   },
+  refundOrder: (orderId: number, reason: string) => request<Order>(`/api/admin/orders/${orderId}/refund`, json({ reason })),
   waiverHistory: () => request<WaiverHistory>("/api/admin/waiver/history"),
   publishWaiver: (title: string, body_text: string) => request<{ version: number }>("/api/admin/waiver/publish", json({ title, body_text })),
   resetWaivers: (reason: string) => request<{ reset_at: string }>("/api/admin/waiver/reset", json({ reason })),

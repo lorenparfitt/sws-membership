@@ -30,8 +30,24 @@ class PaymentNotification:
     raw: dict[str, str]
 
 
+@dataclass(frozen=True)
+class RefundResult:
+    """The processor's answer to a refund request."""
+
+    processor: str
+    transaction_id: str
+    approved: bool
+    raw: dict[str, str]
+    reason: str = ""
+
+
 class NotificationRejected(Exception):
     """The notification failed verification and must be ignored."""
+
+
+class NotificationIgnored(Exception):
+    """A genuine notification about something other than a payment, such as
+    the processor confirming a refund we asked for. Acknowledged, not recorded."""
 
 
 class PaymentProcessor(Protocol):
@@ -40,3 +56,7 @@ class PaymentProcessor(Protocol):
     def open_checkout(self, order_id: int, amount_cents: int, currency: str) -> CheckoutSession: ...
 
     def verify_notification(self, form: dict[str, str]) -> PaymentNotification: ...
+
+    def refund(
+        self, transaction_id: str, amount_cents: int, currency: str, reference: str
+    ) -> RefundResult: ...

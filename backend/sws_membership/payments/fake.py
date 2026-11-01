@@ -11,6 +11,7 @@ from sws_membership.payments.processor import (
     CheckoutSession,
     NotificationRejected,
     PaymentNotification,
+    RefundResult,
 )
 
 
@@ -19,6 +20,7 @@ class FakeProcessor:
 
     def __init__(self, secret: str = "fake-secret") -> None:
         self.secret = secret
+        self.refunds: list[RefundResult] = []
 
     def open_checkout(self, order_id: int, amount_cents: int, currency: str) -> CheckoutSession:
         return CheckoutSession(
@@ -51,3 +53,20 @@ class FakeProcessor:
             currency=form.get("currency", "CAD"),
             raw=dict(form),
         )
+
+    def refund(
+        self, transaction_id: str, amount_cents: int, currency: str, reference: str
+    ) -> RefundResult:
+        result = RefundResult(
+            processor=self.name,
+            transaction_id=f"refund-of-{transaction_id}",
+            approved=True,
+            raw={
+                "relatedTransactionId": transaction_id,
+                "amount_cents": str(amount_cents),
+                "currency": currency,
+                "reference": reference,
+            },
+        )
+        self.refunds.append(result)
+        return result

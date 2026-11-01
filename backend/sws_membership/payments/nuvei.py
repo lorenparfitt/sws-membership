@@ -18,8 +18,10 @@ import httpx
 
 from sws_membership.payments.processor import (
     CheckoutSession,
+    NotificationIgnored,
     NotificationRejected,
     PaymentNotification,
+    RefundResult,
 )
 
 # Keys that may describe the card itself, even masked. They never reach the
@@ -41,6 +43,7 @@ HOSTS = {
     "prod": "https://secure.safecharge.com",
 }
 OPEN_ORDER_PATH = "/ppp/api/v1/openOrder.do"
+REFUND_PATH = "/ppp/api/v1/refundTransaction.do"
 APPROVED_STATUSES = {"APPROVED", "SUCCESS"}
 PAYMENT_TRANSACTION_TYPES = {"Sale", "Auth"}
 
@@ -56,6 +59,25 @@ def open_order_checksum(
 ) -> str:
     """Fields concatenated in request order with no separators, then SHA-256."""
     joined = f"{merchant_id}{merchant_site_id}{client_request_id}{amount}{currency}{time_stamp}{secret_key}"
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
+
+
+def refund_checksum(
+    merchant_id: str,
+    merchant_site_id: str,
+    client_request_id: str,
+    client_unique_id: str,
+    amount: str,
+    currency: str,
+    related_transaction_id: str,
+    time_stamp: str,
+    secret_key: str,
+) -> str:
+    """Fields concatenated in request order with no separators, then SHA-256."""
+    joined = (
+        f"{merchant_id}{merchant_site_id}{client_request_id}{client_unique_id}"
+        f"{amount}{currency}{related_transaction_id}{time_stamp}{secret_key}"
+    )
     return hashlib.sha256(joined.encode("utf-8")).hexdigest()
 
 
@@ -162,7 +184,7 @@ class NuveiProcessor:
         if presented.lower() != expected:
             raise NotificationRejected("checksum mismatch")
         if form.get("transactionType", "Sale") not in PAYMENT_TRANSACTION_TYPES:
-            raise NotificationRejected(f"not a payment: {form.get('transactionType')}")
+            raise NotificationIgnored(f"not a payment: {form.get('transactionType')}")
         try:
             order_id = int(order_reference)
         except ValueError:
@@ -176,4 +198,45 @@ class NuveiProcessor:
             amount_cents=amount_cents,
             currency=form["currency"],
             raw=scrub_card_fields(form),
+        )
+
+    def refund(
+        self, transaction_id: str, amount_cents: int, currency: str, reference: str
+    ) -> RefundResult:
+        amount = format_amount(amount_cents)
+        time_stamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+        client_request_id = f"refund-{reference}-{time_stamp}"
+        body = {
+            "merchantId": self.merchant_id,
+            "merchantSiteId": self.merchant_site_id,
+            "clientRequestId": client_request_id,
+            "clientUniqueId": reference,
+            "amount": amount,
+            "currency": currency,
+            "relatedTransactionId": transaction_id,
+            "timeStamp": time_stamp,
+            "checksum": refund_checksum(
+                self.merchant_id,
+                self.merchant_site_id,
+                client_request_id,
+                reference,
+                amount,
+                currency,
+                transaction_id,
+                time_stamp,
+                self.secret_key,
+            ),
+        }
+        response = self.client.post(REFUND_PATH, json=body)
+        response.raise_for_status()
+        payload = {key: str(value) for key, value in response.json().items()}
+        approved = (
+            payload.get("status") == "SUCCESS" and payload.get("transactionStatus") == "APPROVED"
+        )
+        return RefundResult(
+            processor=self.name,
+            transaction_id=payload.get("transactionId", ""),
+            approved=approved,
+            raw=payload,
+            reason=payload.get("gwErrorReason") or payload.get("reason") or "",
         )

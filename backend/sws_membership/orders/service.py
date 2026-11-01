@@ -12,8 +12,15 @@ from sws_membership.catalog.models import CURRENCY, Product
 from sws_membership.entitlements.models import Entitlement
 from sws_membership.errors import Refused
 from sws_membership.members.models import Member
-from sws_membership.orders.models import Order, OrderLine, OrderStatus, Payment, PaymentMethod
-from sws_membership.payments.processor import PaymentNotification
+from sws_membership.orders.models import (
+    Order,
+    OrderLine,
+    OrderStatus,
+    Payment,
+    PaymentMethod,
+    Refund,
+)
+from sws_membership.payments.processor import PaymentNotification, PaymentProcessor
 
 
 class OrderRefused(Refused):
@@ -22,6 +29,10 @@ class OrderRefused(Refused):
 
 class WrongOrderState(Exception):
     """The order is not in a state where this action makes sense."""
+
+
+class RefundDeclined(Exception):
+    """The processor would not return the money; nothing was changed."""
 
 
 @dataclass
@@ -122,6 +133,7 @@ def mark_paid(order: Order, now: datetime | None = None) -> None:
                     member_id=order.member_id,
                     kind=grant.kind,
                     product=line.product,
+                    order_line=line,
                     valid_from=grant.valid_from,
                     valid_to=grant.valid_to,
                     visits_remaining=grant.visit_count,
@@ -148,6 +160,51 @@ def cancel_order(order: Order) -> None:
     require_pending_card(order)
     order.status = OrderStatus.CANCELLED
     order.save(update_fields=["status"])
+
+
+def refund_order(order: Order, by: Member, reason: str, processor: PaymentProcessor) -> Refund:
+    """Give the whole order back and withdraw what it bought.
+
+    A pass is one unit, so an order is refunded whole, never a line or a
+    partial amount. A card order is refunded through the processor against
+    the payment that paid it, and only an approved answer changes anything
+    here. Cash and free orders are recorded only: the money changes hands
+    at the counter.
+    """
+    if order.status != OrderStatus.PAID:
+        raise WrongOrderState(f"order {order.id} is {order.status}")
+    payment = None
+    result = None
+    if order.payment_method == PaymentMethod.CARD:
+        payment = (
+            order.payments.filter(approved=True, amount_cents=order.total_cents)
+            .order_by("received_at", "id")
+            .first()
+        )
+        if payment is None:
+            raise WrongOrderState(f"order {order.id} has no approved card payment on record")
+        result = processor.refund(
+            payment.transaction_id, order.total_cents, order.currency, str(order.id)
+        )
+        if not result.approved:
+            raise RefundDeclined(result.reason or "the processor declined the refund")
+    with transaction.atomic():
+        refund = Refund.objects.create(
+            order=order,
+            payment=payment,
+            amount_cents=order.total_cents,
+            processor=result.processor if result else "",
+            transaction_id=result.transaction_id if result else "",
+            raw_response=result.raw if result else {},
+            reason=reason,
+            refunded_by=by,
+        )
+        order.status = OrderStatus.REFUNDED
+        order.save(update_fields=["status"])
+        Entitlement.objects.filter(order_line__order=order, revoked_at__isnull=True).update(
+            revoked_at=refund.refunded_at
+        )
+    return refund
 
 
 @transaction.atomic

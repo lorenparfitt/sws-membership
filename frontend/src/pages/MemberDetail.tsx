@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api, ApiError, money, refusalText, type MemberDetail as Detail, type Quote, type StaffProfileBody } from "../api";
+import { admin, api, ApiError, money, refusalText, type MemberDetail as Detail, type Quote, type StaffProfileBody } from "../api";
 import { useAuth } from "../auth";
 import { statusLabel } from "./Orders";
 
@@ -100,6 +100,20 @@ export function MemberDetail() {
       setNote({ ok: true, text: `Order ${orderId} cancelled.` });
     } catch (error) {
       setNote({ ok: false, text: error instanceof ApiError ? String(error.detail) : "Could not cancel." });
+    }
+  }
+
+  async function refundOrder(orderId: number, totalCents: number) {
+    const reason = window.prompt(`Refund order ${orderId} in full, ${money(totalCents)}? The passes it bought stop working. Reason:`);
+    if (reason === null) return;
+    if (!reason.trim()) return setNote({ ok: false, text: "A refund needs a reason." });
+    setNote(null);
+    try {
+      await admin.refundOrder(orderId, reason.trim());
+      await load();
+      setNote({ ok: true, text: `Order ${orderId} refunded, ${money(totalCents)}.` });
+    } catch (error) {
+      setNote({ ok: false, text: error instanceof ApiError ? String(error.detail) : "Could not refund." });
     }
   }
 
@@ -378,7 +392,15 @@ export function MemberDetail() {
                     <td>{order.lines.map((l) => l.product_name).join(", ")}</td>
                     <td>{money(order.total_cents)}</td>
                     <td>{order.payment_method}</td>
-                    <td>{statusLabel(order.status)}</td>
+                    <td>
+                      {statusLabel(order.status)}
+                      {order.refund && (
+                        <span className="label">
+                          <br />
+                          {new Date(order.refund.refunded_at).toLocaleDateString()} by {order.refund.refunded_by}: {order.refund.reason}
+                        </span>
+                      )}
+                    </td>
                     <td className="actions">
                       {order.status === "pending_payment" && (
                         <>
@@ -393,6 +415,11 @@ export function MemberDetail() {
                       {order.status === "paid" && (
                         <button className="link" onClick={() => void showReceipt(order.id)}>
                           {receipt?.id === order.id ? "Hide receipt" : "Receipt"}
+                        </button>
+                      )}
+                      {order.status === "paid" && isAdmin && (
+                        <button className="link" onClick={() => void refundOrder(order.id, order.total_cents)}>
+                          Refund
                         </button>
                       )}
                     </td>

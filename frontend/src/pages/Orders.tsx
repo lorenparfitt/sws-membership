@@ -83,7 +83,10 @@ export function Orders() {
                   <td>{order.lines.map((l) => l.product_name).join(", ")}</td>
                   <td>{money(order.total_cents, order.currency)}</td>
                   <td>{order.payment_method}</td>
-                  <td>{statusLabel(order.status)}</td>
+                  <td>
+                    {statusLabel(order.status)}
+                    {order.refund && <span className="label"> {new Date(order.refund.refunded_at).toLocaleDateString()}</span>}
+                  </td>
                   <td>
                     {order.status === "paid" && (
                       <button className="link" onClick={() => void showReceipt(order.id)}>

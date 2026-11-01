@@ -7,14 +7,14 @@ from ninja import Router, Schema, Status
 from ninja.errors import HttpError
 
 from sws_membership import clock
-from sws_membership.accounts.auth import member_auth, staff_auth
+from sws_membership.accounts.auth import admin_auth, member_auth, staff_auth
 from sws_membership.catalog.models import CURRENCY
 from sws_membership.members.api import load_member
 from sws_membership.members.models import Member
 from sws_membership.orders import service
-from sws_membership.orders.models import Order, OrderStatus, PaymentMethod
-from sws_membership.orders.receipts import receipt_text, send_receipt
-from sws_membership.payments.processor import NotificationRejected
+from sws_membership.orders.models import Order, OrderStatus, PaymentMethod, Refund
+from sws_membership.orders.receipts import receipt_text, send_receipt, send_refund_notice
+from sws_membership.payments.processor import NotificationIgnored, NotificationRejected
 from sws_membership.wiring import wiring
 
 router = Router(tags=["orders"])
@@ -72,6 +72,27 @@ class CheckoutView(Schema):
     parameters: dict[str, str]
 
 
+class RefundBody(Schema):
+    reason: str
+
+
+class RefundView(Schema):
+    amount_cents: int
+    reason: str
+    refunded_at: datetime
+    refunded_by: str
+
+    @classmethod
+    def of(cls, refund: Refund) -> "RefundView":
+        by = refund.refunded_by
+        return cls(
+            amount_cents=refund.amount_cents,
+            reason=refund.reason,
+            refunded_at=refund.refunded_at,
+            refunded_by=f"{by.first_name} {by.last_name}",
+        )
+
+
 class OrderView(Schema):
     id: int
     status: str
@@ -81,10 +102,12 @@ class OrderView(Schema):
     created_at: datetime
     paid_at: datetime | None
     lines: list[LineView]
+    refund: RefundView | None = None
     checkout: CheckoutView | None = None
 
     @classmethod
     def of(cls, order: Order, checkout=None) -> "OrderView":
+        refunds = list(order.refunds.all())
         return cls(
             id=order.id,
             status=order.status,
@@ -97,8 +120,12 @@ class OrderView(Schema):
                 LineView(product_name=l.product_name, amount_cents=l.amount_cents)
                 for l in order.lines.all()
             ],
+            refund=RefundView.of(refunds[0]) if refunds else None,
             checkout=CheckoutView(**checkout.__dict__) if checkout else None,
         )
+
+
+ORDER_PREFETCH = ("lines", "refunds__refunded_by")
 
 
 def _wrong_state(problem: service.WrongOrderState) -> HttpError:
@@ -106,7 +133,7 @@ def _wrong_state(problem: service.WrongOrderState) -> HttpError:
 
 
 def _orders_of(member_id: int) -> list[Order]:
-    return list(Order.objects.filter(member_id=member_id).prefetch_related("lines"))
+    return list(Order.objects.filter(member_id=member_id).prefetch_related(*ORDER_PREFETCH))
 
 
 def _own_order(member: Member, order_id: int) -> Order:
@@ -235,6 +262,28 @@ def staff_cancel_order(request, order_id: int):
     return _cancel(_any_order(order_id))
 
 
+# --- the back office ---------------------------------------------------------
+
+
+@router.post("/admin/orders/{order_id}/refund", auth=admin_auth, response=OrderView)
+def refund_order(request, order_id: int, body: RefundBody):
+    """Give a paid order back in full and withdraw the passes it bought.
+
+    Admin only: money leaves the society. Card money goes back through the
+    processor to the card that paid; cash is handed over at the counter and
+    recorded here.
+    """
+    order = _any_order(order_id)
+    try:
+        refund = service.refund_order(order, request.auth, body.reason, wiring.processor)
+    except service.WrongOrderState as problem:
+        raise _wrong_state(problem)
+    except service.RefundDeclined as why:
+        raise HttpError(409, str(why))
+    send_refund_notice(wiring.mailer, refund, order.member)
+    return OrderView.of(order)
+
+
 # --- the processor's webhook -------------------------------------------------
 
 
@@ -246,6 +295,8 @@ def payment_notification(request):
     try:
         notification = processor.verify_notification(form)
         payment, paid_now = service.record_payment(processor.name, notification)
+    except NotificationIgnored:
+        return HttpResponse("OK", content_type="text/plain")
     except NotificationRejected as why:
         raise HttpError(400, str(why))
     except LookupError as why:

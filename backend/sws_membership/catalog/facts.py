@@ -6,7 +6,7 @@ from sws_membership.waivers.service import has_current_waiver
 
 
 def facts_for(member: Member) -> MemberFacts:
-    rows = member.entitlements.select_related("product").all()
+    rows = member.entitlements.held().select_related("product")
     return MemberFacts(
         date_of_birth=member.date_of_birth,
         entitlements=tuple(Held.of_row(row) for row in rows),
