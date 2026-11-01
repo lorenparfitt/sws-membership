@@ -1207,11 +1207,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "argon2-cffi" },
-    { name = "httpx" },
-    { name = "pillow" },
     { name = "pytest" },
-    { name = "reportlab" },
     { name = "ruff" },
 ]
 
@@ -1233,11 +1229,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "argon2-cffi", specifier = ">=23.1" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "pillow", specifier = ">=10.4" },
     { name = "pytest", specifier = ">=8" },
-    { name = "reportlab", specifier = ">=4.2" },
     { name = "ruff", specifier = ">=0.6" },
 ]
 
