@@ -10,11 +10,26 @@ export class ApiError extends Error {
   }
 }
 
+// Django hands the browser a CSRF cookie; every write echoes it as a header.
+function csrfToken(): string {
+  const match = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : "";
+}
+
+function writeHeaders(): Record<string, string> {
+  return { "X-CSRFToken": csrfToken() };
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const method = (init.method ?? "GET").toUpperCase();
   const response = await fetch(path, {
     credentials: "same-origin",
-    headers: { "content-type": "application/json", ...(init.headers ?? {}) },
     ...init,
+    headers: {
+      "content-type": "application/json",
+      ...(method === "GET" ? {} : writeHeaders()),
+      ...(init.headers ?? {}),
+    },
   });
   if (response.status === 204) return undefined as T;
   const body = await response.json().catch(() => null);
@@ -164,7 +179,12 @@ async function text(path: string): Promise<string> {
 async function upload<T>(path: string, file: File): Promise<T> {
   const form = new FormData();
   form.append("photo", file);
-  const response = await fetch(path, { method: "POST", credentials: "same-origin", body: form });
+  const response = await fetch(path, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: writeHeaders(),
+    body: form,
+  });
   const body = await response.json().catch(() => null);
   if (!response.ok) throw new ApiError(response.status, body?.detail ?? body);
   return body as T;
@@ -275,7 +295,7 @@ export const admin = {
     const response = await fetch(`/api/admin/reports/${name}/csv`, {
       ...json({ parameters }),
       credentials: "same-origin",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...writeHeaders() },
     });
     if (!response.ok) throw new ApiError(response.status, await response.text());
     return response.blob();
@@ -347,7 +367,7 @@ export const api = {
     const response = await fetch("/api/staff/cards/print", {
       method: "POST",
       credentials: "same-origin",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...writeHeaders() },
       body: JSON.stringify({ member_ids: memberIds }),
     });
     if (!response.ok) throw new ApiError(response.status, await response.text());

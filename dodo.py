@@ -5,6 +5,7 @@
 DOIT_CONFIG = {"default_tasks": ["check"], "verbosity": 2, "backend": "json", "dep_file": ".doit.json"}
 
 BACKEND = "backend"
+MANAGE = f"cd {BACKEND} && uv run python manage.py"
 
 
 def task_db_up():
@@ -17,18 +18,31 @@ def task_db_down():
     return {"actions": ["docker compose stop postgres"]}
 
 
+def task_db_reset():
+    """Drop and recreate the local development database (made-up data only)."""
+    psql = "docker compose exec -T postgres psql -U sws -d postgres -c"
+    return {
+        "actions": [
+            f'{psql} "DROP DATABASE IF EXISTS sws_membership WITH (FORCE)"',
+            f'{psql} "CREATE DATABASE sws_membership"',
+        ],
+        "task_dep": ["db_up"],
+    }
+
+
 def task_migrate():
     """Apply database migrations to the configured database."""
-    return {"actions": [f"cd {BACKEND} && uv run alembic upgrade head"]}
+    return {"actions": [f"{MANAGE} migrate"]}
+
+
+def task_makemigrations():
+    """Write migrations for model changes (then review them before committing)."""
+    return {"actions": [f"{MANAGE} makemigrations"]}
 
 
 def task_api():
     """Run the API with reload on the local machine."""
-    return {
-        "actions": [
-            f"cd {BACKEND} && uv run uvicorn sws_membership.main:application --reload --port 8000"
-        ]
-    }
+    return {"actions": [f"{MANAGE} runserver 8000"]}
 
 
 def task_test():
@@ -70,23 +84,22 @@ def task_web_build():
 
 
 def task_manage():
-    """Operator commands: uv run doit manage -- create-member|grant-role|revoke-role ..."""
+    """Operator commands: uv run doit manage --args "create_member EMAIL FIRST LAST" (see manage.py help)."""
     return {
-        "actions": [f"cd {BACKEND} && uv run python -m sws_membership.manage %(args)s"],
-        "params": [{"name": "args", "long": "args", "default": "--help"}],
+        "actions": [f"{MANAGE} %(args)s"],
+        "params": [{"name": "args", "long": "args", "default": "help"}],
     }
 
 
 def task_seed():
     """Fill the local database with made-up members (never real data)."""
     sample = "tmp/sample-members.csv"
-    manage = f"cd {BACKEND} && uv run python -m sws_membership.manage"
     return {
         "actions": [
             "mkdir -p tmp",
-            f"{manage} generate-sample-members ../{sample} --count 200",
-            f"{manage} import-members ../{sample}",
-            f"{manage} seed-catalog",
+            f"{MANAGE} generate_sample_members ../{sample} --count 200",
+            f"{MANAGE} import_members ../{sample}",
+            f"{MANAGE} seed_catalog",
         ],
         "task_dep": ["migrate"],
     }

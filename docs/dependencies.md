@@ -19,22 +19,22 @@ this file, so this stays true when they move.
 
 | Package | Role |
 |---|---|
-| FastAPI | HTTP API, request and response validation |
-| Uvicorn | ASGI server |
-| SQLAlchemy 2 | ORM and queries, typed `Mapped` models |
-| Alembic | schema migrations, `backend/alembic/versions` |
+| Django 5.2 | ORM, migrations, sessions, password hashing, the admin site, settings |
+| Django Ninja | the JSON API: typed routes, Pydantic schemas, OpenAPI at `/api/docs` |
+| Uvicorn | ASGI server for production; `runserver` in development |
 | psycopg 3 | Postgres driver |
-| pydantic-settings | configuration from `SWS_` environment variables or `backend/.env` |
-| email-validator | email fields |
 | httpx | outbound HTTP: Nuvei openOrder, Mailchimp Transactional |
-| argon2-cffi | password hashing |
+| argon2-cffi | the Argon2 password hasher Django is configured to use |
 | reportlab | member card PDFs, Code128 barcode and QR code |
 | Pillow | photo normalisation: resize, re-encode, strip metadata |
-| python-multipart | photo uploads and the processor's form-encoded webhook |
-| pytest, ruff | tests and lint, development only |
+| pytest, pytest-django, ruff | tests and lint, development only |
+
+Configuration is read from `SWS_` environment variables or `backend/.env`
+by `sws_membership/settings.py`, which derives Django's own settings from
+them.
 
 Tests run against a real Postgres database (`sws_membership_test`), created
-and migrated by the test fixtures, with each test rolled back.
+and migrated by pytest-django, with each test rolled back.
 
 ## Frontend (TypeScript, `frontend/package.json`)
 

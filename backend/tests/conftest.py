@@ -1,62 +1,17 @@
 """Tests run against a real Postgres: the schema that ships, not a mock.
 
-The suite creates the test database if it is missing, migrates it to head
-once per run, and wraps every test in a transaction that is rolled back, so
-tests never see each other's rows.
+pytest-django creates the test database, applies the migrations once per
+run, and wraps every test in a transaction that is rolled back. The three
+seams (mail, storage, payments) are swapped for recording stand-ins.
 """
 
-from pathlib import Path
+import json
+from datetime import date
 
 import pytest
-from alembic import command
-from alembic.config import Config
-from sqlalchemy import create_engine, text
-from sqlalchemy.engine import make_url
-from sqlalchemy.orm import Session
+from django.test import Client
 
-from sws_membership.settings import settings
-
-BACKEND_ROOT = Path(__file__).resolve().parent.parent
-
-
-def _ensure_database_exists(url: str) -> None:
-    target = make_url(url)
-    maintenance = create_engine(target.set(database="postgres"), isolation_level="AUTOCOMMIT")
-    with maintenance.connect() as connection:
-        exists = connection.execute(
-            text("SELECT 1 FROM pg_database WHERE datname = :name"), {"name": target.database}
-        ).scalar()
-        if not exists:
-            connection.execute(text(f'CREATE DATABASE "{target.database}"'))
-    maintenance.dispose()
-
-
-def _migrate_to_head(url: str) -> None:
-    config = Config(str(BACKEND_ROOT / "alembic.ini"))
-    config.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
-    config.set_main_option("sqlalchemy.url", url)
-    command.downgrade(config, "base")
-    command.upgrade(config, "head")
-
-
-@pytest.fixture(scope="session")
-def engine():
-    url = settings.test_database_url
-    _ensure_database_exists(url)
-    _migrate_to_head(url)
-    engine = create_engine(url)
-    yield engine
-    engine.dispose()
-
-
-@pytest.fixture
-def session(engine):
-    """A session inside one outer transaction that is always rolled back."""
-    with engine.connect() as connection:
-        transaction = connection.begin()
-        with Session(bind=connection, join_transaction_mode="create_savepoint") as session:
-            yield session
-        transaction.rollback()
+from sws_membership.wiring import wiring
 
 
 class RecordingMailer:
@@ -69,57 +24,88 @@ class RecordingMailer:
         self.sent.append(message)
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def mailer():
-    return RecordingMailer()
+    recording = RecordingMailer()
+    wiring.mailer = recording
+    yield recording
+    wiring.mailer = None
+
+
+@pytest.fixture(autouse=True)
+def storage(tmp_path):
+    from sws_membership.storage.objects import LocalDirectoryStorage
+
+    local = LocalDirectoryStorage(tmp_path / "store")
+    wiring.storage = local
+    yield local
+    wiring.storage = None
+
+
+@pytest.fixture(autouse=True)
+def processor():
+    from sws_membership.payments.fake import FakeProcessor
+
+    fake = FakeProcessor()
+    wiring.processor = fake
+    yield fake
+    wiring.processor = None
+
+
+class ApiClient(Client):
+    """Django's test client with JSON bodies by default."""
+
+    def _json(self, method, path, body, **extra):
+        if body is None:
+            return getattr(super(), method)(path, **extra)
+        return getattr(super(), method)(
+            path, data=json.dumps(body), content_type="application/json", **extra
+        )
+
+    def post_json(self, path, body=None, **extra):
+        return self._json("post", path, body, **extra)
+
+    def put_json(self, path, body=None, **extra):
+        return self._json("put", path, body, **extra)
+
+    def sign_in(self, member) -> None:
+        self.force_login(member, backend="django.contrib.auth.backends.ModelBackend")
 
 
 @pytest.fixture
-def client(session, mailer):
-    """An API client whose requests share the test's rolled-back session."""
-    from fastapi.testclient import TestClient
-
-    from sws_membership.auth.dependencies import get_database_session
-    from sws_membership.main import create_application
-
-    application = create_application(mailer=mailer)
-    application.dependency_overrides[get_database_session] = lambda: session
-    with TestClient(application) as client:
-        yield client
+def client():
+    return ApiClient()
 
 
-def sign_current_waiver(session, member) -> None:
-    """Give a test member a current signature, publishing a template if none exists.
+@pytest.fixture
+def pin_today(monkeypatch):
+    """Pin the calendar: pin_today(date(2026, 6, 15))."""
+    from sws_membership import clock
 
-    Writes the row directly: the signing path itself is covered in
-    test_waivers.py, and other suites only need the gate open.
-    """
-    from datetime import UTC, datetime
+    def pin(day: date) -> None:
+        monkeypatch.setattr(clock, "today", lambda: day)
 
-    from sws_membership.waivers import service
-    from sws_membership.waivers.models import WaiverSignature
+    return pin
 
-    template = service.current_template(session) or service.publish_template(
-        session, "Test waiver", "Test waiver text.", by=None
+
+def make_member(email="rider@example.com", roles=(), **fields):
+    from sws_membership.members.member_numbers import allocate_member_number
+    from sws_membership.members.models import Member, MemberRoleAssignment
+
+    fields.setdefault("first_name", "Sam")
+    fields.setdefault("last_name", "Rider")
+    fields.setdefault("member_number", allocate_member_number())
+    member = Member(email=email, **fields)
+    member.set_unusable_password()
+    member.save()
+    MemberRoleAssignment.objects.bulk_create(
+        MemberRoleAssignment(member=member, role=role) for role in roles
     )
-    session.add(
-        WaiverSignature(
-            member_id=member.id,
-            template_id=template.id,
-            signed_at=datetime.now(UTC),
-            ip_address="test",
-            signer_name=f"{member.first_name} {member.last_name}",
-            signature_key="test/signature.png",
-            document_hash=template.document_hash,
-        )
-    )
-    session.flush()
+    return member
 
 
-def complete_profile(session, member) -> None:
+def complete_profile(member) -> None:
     """Fill the fields the profile rule requires, with a fake photo key."""
-    from datetime import date
-
     from sws_membership.members.models import MemberSport, Sport
 
     member.photo_key = member.photo_key or "test/photo.jpg"
@@ -128,12 +114,37 @@ def complete_profile(session, member) -> None:
     member.city = member.city or "Squamish"
     member.province = member.province or "BC"
     member.postal_code = member.postal_code or "V8B 0A1"
-    if not member.sports:
-        member.sports.append(MemberSport(sport=Sport.KITE_TWIN_TIP))
-    session.flush()
+    member.save()
+    if not member.sports.exists():
+        MemberSport.objects.create(member=member, sport=Sport.KITE_TWIN_TIP)
 
 
-def make_eligible(session, member) -> None:
+def sign_current_waiver(member) -> None:
+    """Give a test member a current signature, publishing a template if none exists.
+
+    Writes the row directly: the signing path itself is covered in
+    test_waivers.py, and other suites only need the gate open.
+    """
+    from django.utils import timezone
+
+    from sws_membership.waivers import service
+    from sws_membership.waivers.models import WaiverSignature
+
+    template = service.current_template() or service.publish_template(
+        "Test waiver", "Test waiver text.", by=None
+    )
+    WaiverSignature.objects.create(
+        member=member,
+        template=template,
+        signed_at=timezone.now(),
+        ip_address="test",
+        signer_name=f"{member.first_name} {member.last_name}",
+        signature_key="test/signature.png",
+        document_hash=template.document_hash,
+    )
+
+
+def make_eligible(member) -> None:
     """A member who clears every non-product rule: complete profile and current waiver."""
-    complete_profile(session, member)
-    sign_current_waiver(session, member)
+    complete_profile(member)
+    sign_current_waiver(member)

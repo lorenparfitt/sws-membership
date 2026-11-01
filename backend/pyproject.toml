@@ -1,26 +1,23 @@
 [project]
 name = "sws-membership"
-version = "0.1.0"
+version = "0.2.0"
 description = "Squamish Windsports Society membership, pass and waiver platform"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi>=0.115",
-    "uvicorn[standard]>=0.30",
-    "sqlalchemy>=2.0",
-    "alembic>=1.13",
+    "django>=5.2,<6",
+    "django-ninja>=1.4",
     "psycopg[binary]>=3.2",
-    "pydantic-settings>=2.4",
-    "email-validator>=2.2",
-    "httpx>=0.27",
     "argon2-cffi>=23.1",
+    "httpx>=0.27",
     "reportlab>=4.2",
     "pillow>=10.4",
-    "python-multipart>=0.0.9",
+    "uvicorn[standard]>=0.30",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8",
+    "pytest-django>=4.9",
     "ruff>=0.6",
 ]
 
@@ -29,7 +26,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/sws_membership"]
+packages = ["sws_membership"]
 
 [tool.uv]
 python-preference = "only-system"
@@ -38,6 +35,14 @@ python-downloads = "never"
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+extend-exclude = ["*/migrations/*"]
+
+[tool.ruff.lint]
+# Django declares Meta options, inlines and schema defaults as class
+# attributes; RUF012 flags every one of them.
+ignore = ["RUF012"]
 
 [tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "sws_membership.settings"
 testpaths = ["tests"]
+python_files = ["test_*.py"]
