@@ -9,7 +9,7 @@ this file, so this stays true when they move.
 | Layer | Choice | Pinned in |
 |---|---|---|
 | Python | 3.12, the system interpreter only; uv never downloads one | `backend/pyproject.toml`, `flake.nix` |
-| Python packages | uv, with `uv.lock` at the repo root | `uv.lock` |
+| Python packages | uv; one lockfile for the backend, one at the root for the task runner | `backend/uv.lock`, `uv.lock` |
 | Node | 24 | `flake.nix` |
 | Database | PostgreSQL 16 | `docker-compose.yml` (server image), `flake.nix` (client) |
 | Task runner | doit; every top-level action is a task in `dodo.py` | root `pyproject.toml` |
